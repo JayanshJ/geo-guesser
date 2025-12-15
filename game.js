@@ -19,7 +19,8 @@ class GameController {
         };
         this.timer = null;
         this.timeRemaining = 0;
-        this.roundTimeLimit = 120; // 2 minutes per round
+        this.roundTimeLimit = 20; // 20 seconds per round
+        this.advancingToNextRound = false; // Prevent double-trigger of auto-advance
         this.setupEventListeners();
     }
 
@@ -494,11 +495,16 @@ class GameController {
 
         this.game.resultMap.fitBounds(bounds);
 
-        document.getElementById('next-round-btn').textContent =
-            this.game.round < this.game.totalRounds ? 'Next Round' : 'View Final Score';
-
+        // In multiplayer, hide next button and wait for both players
         if (this.game.isMultiplayer) {
+            document.getElementById('next-round-btn').classList.add('hidden');
             document.getElementById('mp-round-status').classList.remove('hidden');
+            document.getElementById('mp-waiting-message').textContent = 'Waiting for opponent...';
+        } else {
+            document.getElementById('next-round-btn').classList.remove('hidden');
+            document.getElementById('next-round-btn').textContent =
+                this.game.round < this.game.totalRounds ? 'Next Round' : 'View Final Score';
+            document.getElementById('mp-round-status').classList.add('hidden');
         }
 
         this.showScreen('result-screen');
@@ -511,6 +517,26 @@ class GameController {
             this.loadRound();
         } else {
             this.showFinalScore();
+        }
+    }
+
+    checkBothPlayersFinished(gameData) {
+        if (!this.game.isMultiplayer) return;
+        if (this.advancingToNextRound) return; // Prevent multiple triggers
+        
+        const currentRound = this.game.round;
+        const hostGuess = gameData.hostGuesses && gameData.hostGuesses[currentRound];
+        const opponentGuess = gameData.opponentGuesses && gameData.opponentGuesses[currentRound];
+        
+        if (hostGuess && opponentGuess) {
+            // Both players have submitted - show brief result then auto-advance
+            this.advancingToNextRound = true;
+            document.getElementById('mp-waiting-message').textContent = 'Both finished! Moving on...';
+            
+            setTimeout(() => {
+                this.advancingToNextRound = false;
+                this.nextRound();
+            }, 2000); // Wait 2 seconds to show results, then advance
         }
     }
 
@@ -612,6 +638,12 @@ function initApp() {
                     ? gameData.resolvedLocations 
                     : Object.values(gameData.resolvedLocations);
                 gameController.game.resolvedLocations = resolvedArr;
+            }
+            
+            // Check if both players finished this round and auto-advance
+            const resultScreenVisible = document.getElementById('result-screen').classList.contains('hidden') === false;
+            if (resultScreenVisible) {
+                gameController.checkBothPlayersFinished(gameData);
             }
         }
     };
