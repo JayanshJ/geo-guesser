@@ -356,6 +356,12 @@ let gameController;
 
 function initApp() {
     gameController = new GameController();
+    window.gameController = gameController; // Make accessible globally
+    
+    // Initialize UI controller after game controller is ready
+    initUIController();
+    
+    // Initialize auth service
     authService.initialize();
     
     // Multiplayer game update handler

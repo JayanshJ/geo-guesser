@@ -195,8 +195,10 @@ class UIController {
     }
 }
 
-// Initialize UI Controller when page loads
+// Initialize UI Controller - called from initApp in game.js
 let uiController;
-window.addEventListener('DOMContentLoaded', () => {
+
+function initUIController() {
     uiController = new UIController(authService, multiplayerService);
-});
+    window.uiController = uiController;
+}
