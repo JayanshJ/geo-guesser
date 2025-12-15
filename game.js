@@ -371,7 +371,11 @@ function initApp() {
     // Multiplayer game update handler
     window.multiplayerGameUpdate = (gameData) => {
         if (gameData.status === 'playing' && gameData.opponent) {
-            if (document.getElementById('lobby-screen').classList.contains('hidden') === false) {
+            const lobbyVisible = document.getElementById('lobby-screen').classList.contains('hidden') === false;
+            const matchmakingVisible = document.getElementById('matchmaking-screen').classList.contains('hidden') === false;
+
+            // If we're in lobby or still on matchmaking (host waiting), transition to lobby
+            if (lobbyVisible || matchmakingVisible) {
                 uiController.showLobby();
             }
         }
