@@ -204,7 +204,11 @@ class GameController {
             this.game.guessLocation
         ) / 1000;
 
-        const points = Math.round(5000 * Math.exp(-distance / 2000));
+        // Different scoring for India (smaller area) vs World
+        // India: ~3000km max, need tighter scoring (decay at 300km)
+        // World: ~20000km max, looser scoring (decay at 2000km)
+        const decayFactor = this.game.mode === 'india' ? 300 : 2000;
+        const points = Math.round(5000 * Math.exp(-distance / decayFactor));
 
         const result = {
             round: this.game.round,
