@@ -275,6 +275,17 @@ class MultiplayerService {
             status: 'playing'
         });
         
+        // Set currentGame immediately with updated data so showLobby() can access it
+        const updatedGameData = {
+            ...gameData,
+            opponent: {
+                uid: this.authService.user.uid,
+                displayName: this.authService.user.displayName
+            },
+            status: 'playing'
+        };
+        this.currentGame = { ref: gameRef, data: updatedGameData };
+        
         this.roomCode = code;
         this.listenToGame(code);
         return { success: true };
