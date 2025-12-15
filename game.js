@@ -15,6 +15,9 @@ class GameController {
             mode: 'world',
             isMultiplayer: false
         };
+        this.timer = null;
+        this.timeRemaining = 0;
+        this.roundTimeLimit = 120; // 2 minutes per round
         this.setupEventListeners();
     }
 
@@ -24,6 +27,26 @@ class GameController {
         document.getElementById('minimize-map-btn').addEventListener('click', () => this.minimizeMap());
         document.getElementById('confirm-guess-btn').addEventListener('click', () => this.confirmGuess());
         document.getElementById('next-round-btn').addEventListener('click', () => this.nextRound());
+        document.getElementById('opponent-left-ok-btn').addEventListener('click', () => this.handleOpponentLeftOk());
+        
+        // Handle page unload to notify opponent
+        window.addEventListener('beforeunload', () => this.handlePlayerExit());
+    }
+
+    handleOpponentLeftOk() {
+        document.getElementById('opponent-left-modal').classList.add('hidden');
+        this.showScreen('main-menu');
+    }
+
+    handlePlayerExit() {
+        if (this.game.isMultiplayer && multiplayerService.currentGame) {
+            multiplayerService.notifyPlayerLeft();
+        }
+    }
+
+    showOpponentLeftModal() {
+        this.stopTimer();
+        document.getElementById('opponent-left-modal').classList.remove('hidden');
     }
 
     startGame(mode, isMultiplayer = false) {
@@ -33,7 +56,13 @@ class GameController {
         this.game.guessLocation = null;
         this.game.mode = mode;
         this.game.isMultiplayer = isMultiplayer;
-        this.game.gameLocations = this.getLocationsForMode();
+        
+        // For multiplayer, use shared locations from Firestore; for solo, generate locally
+        if (isMultiplayer && multiplayerService.currentGame && multiplayerService.currentGame.data.locations) {
+            this.game.gameLocations = multiplayerService.currentGame.data.locations;
+        } else {
+            this.game.gameLocations = this.getLocationsForMode();
+        }
 
         const modeText = mode === 'india' ? '🇮🇳 India Mode' : '🌍 World Mode';
         document.getElementById('game-mode-text').textContent = modeText;
@@ -128,6 +157,8 @@ class GameController {
                     lng: data.location.latLng.lng()
                 };
                 this.initializeStreetView(this.game.currentLocation);
+                // Start the timer once location is loaded
+                this.startTimer();
             } else {
                 const newLocations = this.getLocationsForMode();
                 this.game.currentLocation = newLocations[0];
@@ -180,6 +211,107 @@ class GameController {
         toggleBtn.classList.remove('hidden');
     }
 
+    // Timer methods
+    startTimer() {
+        this.stopTimer(); // Clear any existing timer
+        this.timeRemaining = this.roundTimeLimit;
+        this.updateTimerDisplay();
+        
+        this.timer = setInterval(() => {
+            this.timeRemaining--;
+            this.updateTimerDisplay();
+            
+            if (this.timeRemaining <= 0) {
+                this.stopTimer();
+                this.handleTimeUp();
+            }
+        }, 1000);
+    }
+
+    stopTimer() {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+    }
+
+    updateTimerDisplay() {
+        const minutes = Math.floor(this.timeRemaining / 60);
+        const seconds = this.timeRemaining % 60;
+        const display = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        const timerEl = document.getElementById('round-timer');
+        timerEl.textContent = display;
+        
+        // Update color based on time remaining
+        timerEl.classList.remove('warning', 'danger');
+        if (this.timeRemaining <= 10) {
+            timerEl.classList.add('danger');
+        } else if (this.timeRemaining <= 30) {
+            timerEl.classList.add('warning');
+        }
+    }
+
+    handleTimeUp() {
+        // Auto-submit with current guess or no guess
+        if (this.game.guessLocation) {
+            this.confirmGuess();
+        } else {
+            // No guess made - score 0 for this round
+            const result = {
+                round: this.game.round,
+                actualLocation: this.game.currentLocation,
+                guessLocation: null,
+                distance: Infinity,
+                points: 0
+            };
+            this.game.roundResults.push(result);
+            
+            if (this.game.isMultiplayer) {
+                multiplayerService.submitGuess(
+                    this.game.round,
+                    null,
+                    Infinity,
+                    0
+                );
+            }
+            
+            this.showTimeUpResult(result);
+        }
+    }
+
+    showTimeUpResult(result) {
+        document.getElementById('result-round').textContent = result.round;
+        document.getElementById('result-distance').textContent = 'No guess made';
+        document.getElementById('result-points').textContent = '0';
+        document.getElementById('result-total').textContent = this.game.score.toLocaleString();
+
+        // Show only actual location on map
+        this.game.resultMap = new google.maps.Map(document.getElementById('result-map'), {
+            center: result.actualLocation,
+            zoom: 5,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: true,
+        });
+
+        new google.maps.Marker({
+            position: result.actualLocation,
+            map: this.game.resultMap,
+            title: 'Actual Location',
+            icon: { url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png' }
+        });
+
+        document.getElementById('next-round-btn').textContent =
+            this.game.round < this.game.totalRounds ? 'Next Round' : 'View Final Score';
+
+        if (this.game.isMultiplayer) {
+            document.getElementById('mp-round-status').classList.remove('hidden');
+        }
+
+        this.showScreen('result-screen');
+    }
+
     placeGuessMarker(latLng) {
         if (this.game.guessMarker) {
             this.game.guessMarker.setMap(null);
@@ -198,6 +330,9 @@ class GameController {
 
     async confirmGuess() {
         if (!this.game.guessLocation) return;
+
+        // Stop the timer
+        this.stopTimer();
 
         const distance = google.maps.geometry.spherical.computeDistanceBetween(
             new google.maps.LatLng(this.game.currentLocation),
@@ -340,7 +475,9 @@ class GameController {
 
     quitGame() {
         if (confirm('Quit current game?')) {
+            this.stopTimer();
             if (this.game.isMultiplayer) {
+                multiplayerService.notifyPlayerLeft();
                 multiplayerService.leaveGame();
             }
             this.showScreen('main-menu');

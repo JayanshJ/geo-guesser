@@ -668,3 +668,72 @@ body {
         gap: 10px;
     }
 }
+
+/* Timer */
+.timer-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.timer-icon {
+    font-size: 1.2rem;
+}
+
+.timer-display {
+    min-width: 45px;
+    text-align: center;
+}
+
+.timer-display.warning {
+    color: #ffc107;
+    animation: pulse 1s infinite;
+}
+
+.timer-display.danger {
+    color: #ff4444;
+    animation: pulse 0.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 40px 50px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    max-width: 400px;
+}
+
+.modal-content h2 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.modal-content p {
+    margin-bottom: 25px;
+    opacity: 0.9;
+}

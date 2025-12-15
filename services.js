@@ -186,6 +186,23 @@ class MultiplayerService {
         return code;
     }
 
+    // Generate locations for multiplayer game (stored in Firestore)
+    generateLocationsForMode(mode, count) {
+        const locations = [];
+        for (let i = 0; i < count; i++) {
+            let lat, lng;
+            if (mode === 'india') {
+                lat = 8 + Math.random() * 29;
+                lng = 68 + Math.random() * 29;
+            } else {
+                lat = (Math.random() * 160) - 80;
+                lng = (Math.random() * 360) - 180;
+            }
+            locations.push({ lat, lng });
+        }
+        return locations;
+    }
+
     async createGame(mode) {
         if (!this.authService.user) return null;
         
@@ -194,6 +211,9 @@ class MultiplayerService {
         
         // Generate a unique room code
         this.roomCode = this.generateRoomCode();
+        
+        // Generate locations for the game (so both players get the same ones)
+        const locations = this.generateLocationsForMode(mode, 5);
         
         const gameRef = this.db.collection('multiplayer_games').doc(this.roomCode);
         const gameData = {
@@ -208,7 +228,7 @@ class MultiplayerService {
             status: 'waiting', // waiting, playing, finished
             currentRound: 1,
             totalRounds: 5,
-            locations: [],
+            locations: locations,
             hostGuesses: {},
             opponentGuesses: {},
             hostScore: 0,
@@ -294,9 +314,31 @@ class MultiplayerService {
     }
 
     onGameUpdate(gameData) {
+        // Check if opponent left
+        if (gameData.status === 'abandoned') {
+            if (window.gameController) {
+                window.gameController.showOpponentLeftModal();
+            }
+            return;
+        }
+        
         // This will be called by the game controller
         if (window.multiplayerGameUpdate) {
             window.multiplayerGameUpdate(gameData);
+        }
+    }
+
+    async notifyPlayerLeft() {
+        if (!this.currentGame) return;
+        
+        try {
+            await this.currentGame.ref.update({
+                status: 'abandoned',
+                abandonedBy: this.authService.user.uid,
+                abandonedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch (e) {
+            console.log('Could not update game status:', e);
         }
     }
 
