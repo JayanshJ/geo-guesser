@@ -13,7 +13,9 @@ class GameController {
             resultMap: null,
             guessMarker: null,
             mode: 'world',
-            isMultiplayer: false
+            isMultiplayer: false,
+            isHost: false,
+            resolvedLocations: [] // Stores actual panorama locations
         };
         this.timer = null;
         this.timeRemaining = 0;
@@ -56,12 +58,21 @@ class GameController {
         this.game.guessLocation = null;
         this.game.mode = mode;
         this.game.isMultiplayer = isMultiplayer;
+        this.game.resolvedLocations = [];
         
         // For multiplayer, use shared locations from Firestore; for solo, generate locally
         if (isMultiplayer && multiplayerService.currentGame && multiplayerService.currentGame.data.locations) {
             this.game.gameLocations = multiplayerService.currentGame.data.locations;
+            // Check if we're the host
+            this.game.isHost = multiplayerService.currentGame.data.host.uid === authService.user.uid;
+            // Check if resolved locations already exist (opponent joining)
+            if (multiplayerService.currentGame.data.resolvedLocations && 
+                multiplayerService.currentGame.data.resolvedLocations.length > 0) {
+                this.game.resolvedLocations = multiplayerService.currentGame.data.resolvedLocations;
+            }
         } else {
             this.game.gameLocations = this.getLocationsForMode();
+            this.game.isHost = true;
         }
 
         const modeText = mode === 'india' ? '🇮🇳 India Mode' : '🌍 World Mode';
@@ -114,8 +125,23 @@ class GameController {
         this.game.guessLocation = null;
         document.getElementById('confirm-guess-btn').disabled = true;
 
-        this.game.currentLocation = this.game.gameLocations[this.game.round - 1];
-        this.findStreetViewLocation(this.game.currentLocation);
+        // In multiplayer, check if we have a resolved location for this round
+        const roundIndex = this.game.round - 1;
+        if (this.game.isMultiplayer && !this.game.isHost) {
+            // Opponent: wait for host's resolved location if not available
+            if (this.game.resolvedLocations[roundIndex] && this.game.resolvedLocations[roundIndex].panoId) {
+                this.game.currentLocation = this.game.resolvedLocations[roundIndex];
+                this.initializeStreetViewByPanoId(this.game.resolvedLocations[roundIndex].panoId);
+                this.startTimer();
+            } else {
+                // Wait for host to resolve location
+                this.waitForResolvedLocation(roundIndex);
+            }
+        } else {
+            // Host or solo: find Street View and resolve
+            this.game.currentLocation = this.game.gameLocations[roundIndex];
+            this.findStreetViewLocation(this.game.currentLocation);
+        }
 
         const mapCenter = this.game.mode === 'india' ? { lat: 22.5937, lng: 78.9629 } : { lat: 20, lng: 0 };
         const mapZoom = this.game.mode === 'india' ? 5 : 2;
@@ -142,6 +168,28 @@ class GameController {
         this.minimizeMap();
     }
 
+    waitForResolvedLocation(roundIndex) {
+        // Poll for resolved location from Firestore updates
+        const checkInterval = setInterval(() => {
+            if (this.game.resolvedLocations[roundIndex] && this.game.resolvedLocations[roundIndex].panoId) {
+                clearInterval(checkInterval);
+                this.game.currentLocation = this.game.resolvedLocations[roundIndex];
+                this.initializeStreetViewByPanoId(this.game.resolvedLocations[roundIndex].panoId);
+                this.startTimer();
+            }
+        }, 500); // Check every 500ms
+        
+        // Timeout after 30 seconds - fallback to finding own location
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            if (!this.game.resolvedLocations[roundIndex]) {
+                console.warn('Timeout waiting for host location, falling back to own search');
+                this.game.currentLocation = this.game.gameLocations[roundIndex];
+                this.findStreetViewLocation(this.game.currentLocation);
+            }
+        }, 30000);
+    }
+
     findStreetViewLocation(startLocation) {
         const streetViewService = new google.maps.StreetViewService();
         const STREET_VIEW_MAX_DISTANCE = 50000;
@@ -150,12 +198,21 @@ class GameController {
             location: startLocation,
             radius: STREET_VIEW_MAX_DISTANCE,
             source: google.maps.StreetViewSource.OUTDOOR
-        }, (data, status) => {
+        }, async (data, status) => {
             if (status === google.maps.StreetViewStatus.OK) {
-                this.game.currentLocation = {
+                const resolvedLocation = {
                     lat: data.location.latLng.lat(),
-                    lng: data.location.latLng.lng()
+                    lng: data.location.latLng.lng(),
+                    panoId: data.location.pano
                 };
+                this.game.currentLocation = resolvedLocation;
+                
+                // If multiplayer host, save resolved location to Firestore
+                if (this.game.isMultiplayer && this.game.isHost) {
+                    this.game.resolvedLocations[this.game.round - 1] = resolvedLocation;
+                    await multiplayerService.saveResolvedLocation(this.game.round - 1, resolvedLocation);
+                }
+                
                 this.initializeStreetView(this.game.currentLocation);
                 // Start the timer once location is loaded
                 this.startTimer();
@@ -165,6 +222,28 @@ class GameController {
                 this.findStreetViewLocation(this.game.currentLocation);
             }
         });
+    }
+
+    initializeStreetViewByPanoId(panoId) {
+        if (!this.game.panorama) {
+            this.game.panorama = new google.maps.StreetViewPanorama(
+                document.getElementById('street-view'),
+                {
+                    pano: panoId,
+                    pov: { heading: 34, pitch: 10 },
+                    zoom: 1,
+                    addressControl: false,
+                    showRoadLabels: false,
+                    disableDefaultUI: false,
+                    linksControl: true,
+                    panControl: true,
+                    enableCloseButton: false
+                }
+            );
+        } else {
+            this.game.panorama.setPano(panoId);
+            this.game.panorama.setPov({ heading: 34, pitch: 10 });
+        }
     }
 
     initializeStreetView(location) {
@@ -525,6 +604,15 @@ function initApp() {
             
             document.getElementById('your-mp-score').textContent = yourScore;
             document.getElementById('opponent-mp-score').textContent = oppScore;
+            
+            // Sync resolved locations for opponent
+            if (!isHost && gameData.resolvedLocations) {
+                // Convert object to array if needed
+                const resolvedArr = Array.isArray(gameData.resolvedLocations) 
+                    ? gameData.resolvedLocations 
+                    : Object.values(gameData.resolvedLocations);
+                gameController.game.resolvedLocations = resolvedArr;
+            }
         }
     };
 }

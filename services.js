@@ -324,6 +324,18 @@ class MultiplayerService {
         });
     }
 
+    async saveResolvedLocation(roundIndex, resolvedLocation) {
+        if (!this.currentGame) return;
+        
+        try {
+            await this.currentGame.ref.update({
+                [`resolvedLocations.${roundIndex}`]: resolvedLocation
+            });
+        } catch (e) {
+            console.error('Error saving resolved location:', e);
+        }
+    }
+
     onGameUpdate(gameData) {
         // Check if opponent left
         if (gameData.status === 'abandoned') {
