@@ -19,7 +19,7 @@ class GameController {
         };
         this.timer = null;
         this.timeRemaining = 0;
-        this.roundTimeLimit = 20; // 20 seconds per round
+        this.roundTimeLimit = 60; // 60 seconds per round
         this.advancingToNextRound = false; // Prevent double-trigger of auto-advance
         this.setupEventListeners();
     }
