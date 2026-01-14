@@ -186,6 +186,9 @@ class UIController {
         this.showScreen('lobby-screen');
         const gameData = this.multiplayer.currentGame.data;
         
+        console.log('[Lobby] Game data:', gameData);
+        console.log('[Lobby] TimeControl from gameData:', gameData.timeControl);
+        
         // Show host info
         document.getElementById('lobby-host-name').textContent = gameData.host.displayName;
 
@@ -203,6 +206,7 @@ class UIController {
                 document.getElementById('lobby-start-container').classList.remove('hidden');
                 setTimeout(() => {
                     const timeControl = gameData.timeControl || 'unlimited';
+                    console.log('[Lobby] Starting game with timeControl:', timeControl);
                     window.gameController.startGame(gameData.mode, true, timeControl);
                 }, 2000);
             }

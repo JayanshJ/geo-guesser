@@ -53,6 +53,8 @@ class GameController {
     }
 
     startGame(mode, isMultiplayer = false, timeControl = 'unlimited') {
+        console.log('[Game] Starting game. Mode:', mode, 'Multiplayer:', isMultiplayer, 'TimeControl:', timeControl);
+        
         this.game.round = 1;
         this.game.score = 0;
         this.game.roundResults = [];
@@ -134,10 +136,10 @@ class GameController {
             if (this.game.resolvedLocations[roundIndex] && this.game.resolvedLocations[roundIndex].panoId) {
                 this.game.currentLocation = this.game.resolvedLocations[roundIndex];
                 this.initializeStreetViewByPanoId(this.game.resolvedLocations[roundIndex].panoId);
-                this.startTimer();
             } else {
-                // Wait for host to resolve location
+                // Wait for host to resolve location - timer will start when location is resolved
                 this.waitForResolvedLocation(roundIndex);
+                return; // Exit early, map setup and timer will be handled after location is resolved
             }
         } else {
             // Host or solo: find Street View and resolve
@@ -168,12 +170,21 @@ class GameController {
         }
 
         this.minimizeMap();
-        this.startTimer();
+        
+        // Start timer after map is ready
+        // For host/solo: timer starts in findStreetViewLocation callback
+        // For opponent with pre-loaded location: start now
+        if (this.game.isMultiplayer && !this.game.isHost && 
+            this.game.resolvedLocations[roundIndex] && this.game.resolvedLocations[roundIndex].panoId) {
+            this.startTimer();
+        }
     }
 
     startTimer() {
         // Clear any existing timer
         this.stopTimer();
+        
+        console.log('[Timer] Starting timer. timeControl:', this.game.timeControl, 'isHost:', this.game.isHost, 'isMultiplayer:', this.game.isMultiplayer);
         
         // If unlimited time, hide timer
         if (this.game.timeControl === 'unlimited') {
@@ -183,6 +194,7 @@ class GameController {
         
         // Set time in seconds
         this.game.timeRemaining = parseInt(this.game.timeControl);
+        console.log('[Timer] Time remaining set to:', this.game.timeRemaining, 'seconds');
         
         // Show timer
         const timerDisplay = document.getElementById('timer-display');
