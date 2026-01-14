@@ -104,10 +104,41 @@ body {
 .user-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
     background: rgba(255, 255, 255, 0.1);
-    padding: 10px 15px;
-    border-radius: 50px;
+    padding: 12px 20px;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.user-name-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-display-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.user-email {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.user-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .user-avatar-text {

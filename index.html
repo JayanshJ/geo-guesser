@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoGuesser - Multiplayer Edition</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-production.css">
+    <link rel="stylesheet" href="friends-styles.css">
+    <link rel="stylesheet" href="auth-styles.css">
 </head>
 <body>
     <!-- Welcome Screen -->
@@ -12,11 +14,76 @@
         <div class="auth-container">
             <h1>🌍 GeoGuesser</h1>
             <p class="tagline">Challenge players worldwide!</p>
-            <div class="name-input-container">
-                <input type="text" id="player-name-input" class="name-input" placeholder="Enter your name..." maxlength="20">
-                <button id="start-playing-btn" class="btn btn-primary btn-large">Start Playing</button>
+            
+            <!-- Anonymous Login -->
+            <div id="anonymous-auth" class="auth-option">
+                <div class="name-input-container">
+                    <input type="text" id="player-name-input" class="name-input" placeholder="Enter your name..." maxlength="20">
+                    <button id="start-playing-btn" class="btn btn-primary btn-large">Play as Guest</button>
+                </div>
+                <div class="auth-divider">OR</div>
             </div>
-            <p class="privacy-note">Your scores will be saved to the leaderboard</p>
+            
+            <!-- Email/Password Auth -->
+            <div id="email-auth-options" class="auth-buttons">
+                <button id="show-signin-btn" class="btn btn-secondary">Sign In with Email</button>
+                <button id="show-signup-btn" class="btn btn-secondary">Create Account</button>
+            </div>
+            
+            <!-- Sign In Form -->
+            <div id="signin-form" class="auth-form hidden">
+                <h3>Sign In</h3>
+                <input type="email" id="signin-email" class="auth-input" placeholder="Email" autocomplete="email">
+                <input type="password" id="signin-password" class="auth-input" placeholder="Password" autocomplete="current-password">
+                <div class="auth-form-footer">
+                    <a href="#" id="forgot-password-link" class="forgot-password-link">Forgot password?</a>
+                </div>
+                <button id="signin-submit-btn" class="btn btn-primary">
+                    <span class="btn-text">Sign In</span>
+                    <span class="btn-spinner hidden">⌛</span>
+                </button>
+                <button id="signin-cancel-btn" class="btn btn-small">Cancel</button>
+                <div id="signin-error" class="error-message hidden"></div>
+                <div id="signin-success" class="success-message hidden"></div>
+            </div>
+            
+            <!-- Sign Up Form -->
+            <div id="signup-form" class="auth-form hidden">
+                <h3>Create Account</h3>
+                <input type="text" id="signup-username" class="auth-input" placeholder="Username (unique, 3-20 characters)" maxlength="20" autocomplete="username">
+                <input type="text" id="signup-name" class="auth-input" placeholder="Display Name" maxlength="20" autocomplete="name">
+                <input type="email" id="signup-email" class="auth-input" placeholder="Email" autocomplete="email">
+                <input type="password" id="signup-password" class="auth-input" placeholder="Password (min 8 characters)" autocomplete="new-password">
+                <input type="password" id="signup-password-confirm" class="auth-input" placeholder="Confirm Password" autocomplete="new-password">
+                <div class="password-strength" id="password-strength"></div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="terms-checkbox">
+                    <span>I agree to the Terms of Service and Privacy Policy</span>
+                </label>
+                <button id="signup-submit-btn" class="btn btn-primary">
+                    <span class="btn-text">Create Account</span>
+                    <span class="btn-spinner hidden">⌛</span>
+                </button>
+                <button id="signup-cancel-btn" class="btn btn-small">Cancel</button>
+                <div id="signup-error" class="error-message hidden"></div>
+                <div id="signup-success" class="success-message hidden"></div>
+            </div>
+            
+            <!-- Forgot Password Form -->
+            <div id="forgot-password-form" class="auth-form hidden">
+                <h3>Reset Password</h3>
+                <p class="form-description">Enter your email address and we'll send you a link to reset your password.</p>
+                <input type="email" id="forgot-email" class="auth-input" placeholder="Email" autocomplete="email">
+                <button id="forgot-submit-btn" class="btn btn-primary">
+                    <span class="btn-text">Send Reset Link</span>
+                    <span class="btn-spinner hidden">⌛</span>
+                </button>
+                <button id="forgot-cancel-btn" class="btn btn-small">Back to Sign In</button>
+                <div id="forgot-error" class="error-message hidden"></div>
+                <div id="forgot-success" class="success-message hidden"></div>
+            </div>
+                <div id="signup-error" class="error-message hidden"></div>
+            </div>
         </div>
     </div>
 
@@ -51,9 +118,18 @@
     <div id="main-menu" class="screen hidden">
         <div class="menu-header">
             <div id="user-section" class="user-info">
-                <span class="user-avatar-text" id="user-avatar-text">🎮</span>
-                <span id="user-name"></span>
-                <button id="change-name-btn" class="btn btn-small">Change Name</button>
+                <div class="user-details">
+                    <div class="user-name-section">
+                        <span class="user-avatar-text" id="user-avatar-text">🎮</span>
+                        <span id="user-name" class="user-display-name"></span>
+                    </div>
+                    <span id="user-email" class="user-email hidden"></span>
+                </div>
+                <div class="user-actions">
+                    <button id="change-name-btn" class="btn btn-small">Change Name</button>
+                    <button id="friends-btn" class="btn btn-small hidden">👥 Friends</button>
+                    <button id="signout-btn" class="btn btn-small hidden">Sign Out</button>
+                </div>
             </div>
         </div>
         
@@ -139,6 +215,53 @@
             <h2>🏆 Leaderboard</h2>
             <div id="leaderboard-content" class="leaderboard-list"></div>
             <button id="close-leaderboard-btn" class="btn btn-primary">Back</button>
+        </div>
+    </div>
+
+    <!-- Friends Screen -->
+    <div id="friends-screen" class="screen hidden">
+        <div class="friends-container">
+            <h2>👥 Friends</h2>
+            
+            <!-- Search/Add Friends -->
+            <div id="auth-users-only" class="friends-section">
+                <h3>Add Friend</h3>
+                <div class="search-container">
+                    <input type="text" id="friend-search-input" class="search-input" placeholder="Search by username (e.g. john_doe)">
+                    <button id="search-friend-btn" class="btn btn-primary">🔍 Search</button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+            </div>
+            
+            <div id="guest-message" class="hidden">
+                <p class="info-message">Sign in with email to add friends!</p>
+            </div>
+            
+            <!-- Friend Requests -->
+            <div class="friends-section">
+                <h3>Friend Requests</h3>
+                <div id="friend-requests-list" class="friends-list"></div>
+            </div>
+            
+            <!-- Friends List -->
+            <div class="friends-section">
+                <h3>Your Friends</h3>
+                <div id="friends-list" class="friends-list"></div>
+            </div>
+            
+            <button id="close-friends-btn" class="btn btn-primary">Back</button>
+        </div>
+    </div>
+
+    <!-- Game Invite Modal -->
+    <div id="game-invite-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Game Invite</h2>
+            <p id="invite-message">Friend invited you to a game!</p>
+            <div class="modal-buttons">
+                <button id="accept-invite-btn" class="btn btn-primary">Join Game</button>
+                <button id="decline-invite-btn" class="btn btn-secondary">Decline</button>
+            </div>
         </div>
     </div>
 
@@ -232,6 +355,7 @@
 
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     
     <!-- Configuration -->

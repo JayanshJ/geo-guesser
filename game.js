@@ -580,11 +580,22 @@ function initApp() {
     gameController = new GameController();
     window.gameController = gameController; // Make accessible globally
     
+    // Initialize auth service first (it's async but we don't need to wait)
+    authService.initialize();
+    
+    // Initialize friends service with retry mechanism
+    const initFriendsService = () => {
+        if (authService.db) {
+            friendsService.initialize();
+        } else {
+            // Retry after a short delay if db not ready
+            setTimeout(initFriendsService, 100);
+        }
+    };
+    initFriendsService();
+    
     // Initialize UI controller after game controller is ready
     initUIController();
-    
-    // Initialize auth service
-    authService.initialize();
     
     // Multiplayer game update handler
     window.multiplayerGameUpdate = (gameData) => {
