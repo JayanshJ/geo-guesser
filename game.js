@@ -13,7 +13,10 @@ class GameController {
             resultMap: null,
             guessMarker: null,
             mode: 'world',
-            isMultiplayer: false
+            isMultiplayer: false,
+            timeControl: 'unlimited',
+            timeRemaining: 0,
+            timerInterval: null
         };
         this.setupEventListeners();
     }
@@ -26,13 +29,14 @@ class GameController {
         document.getElementById('next-round-btn').addEventListener('click', () => this.nextRound());
     }
 
-    startGame(mode, isMultiplayer = false) {
+    startGame(mode, isMultiplayer = false, timeControl = 'unlimited') {
         this.game.round = 1;
         this.game.score = 0;
         this.game.roundResults = [];
         this.game.guessLocation = null;
         this.game.mode = mode;
         this.game.isMultiplayer = isMultiplayer;
+        this.game.timeControl = timeControl;
         this.game.gameLocations = this.getLocationsForMode();
 
         const modeText = mode === 'india' ? '🇮🇳 India Mode' : '🌍 World Mode';
@@ -111,6 +115,70 @@ class GameController {
         }
 
         this.minimizeMap();
+        this.startTimer();
+    }
+
+    startTimer() {
+        // Clear any existing timer
+        this.stopTimer();
+        
+        // If unlimited time, hide timer
+        if (this.game.timeControl === 'unlimited') {
+            document.getElementById('timer-display').classList.add('hidden');
+            return;
+        }
+        
+        // Set time in seconds
+        this.game.timeRemaining = parseInt(this.game.timeControl);
+        
+        // Show timer
+        const timerDisplay = document.getElementById('timer-display');
+        timerDisplay.classList.remove('hidden');
+        this.updateTimerDisplay();
+        
+        // Start countdown
+        this.game.timerInterval = setInterval(() => {
+            this.game.timeRemaining--;
+            this.updateTimerDisplay();
+            
+            // Warning when < 30 seconds
+            if (this.game.timeRemaining <= 30 && this.game.timeRemaining > 0) {
+                timerDisplay.classList.add('warning');
+            }
+            
+            // Time's up!
+            if (this.game.timeRemaining <= 0) {
+                this.stopTimer();
+                this.handleTimeUp();
+            }
+        }, 1000);
+    }
+
+    stopTimer() {
+        if (this.game.timerInterval) {
+            clearInterval(this.game.timerInterval);
+            this.game.timerInterval = null;
+        }
+        const timerDisplay = document.getElementById('timer-display');
+        timerDisplay.classList.remove('warning');
+    }
+
+    updateTimerDisplay() {
+        const minutes = Math.floor(this.game.timeRemaining / 60);
+        const seconds = this.game.timeRemaining % 60;
+        const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('timer-value').textContent = timeString;
+    }
+
+    handleTimeUp() {
+        // Auto-submit with no guess (center of map as default)
+        if (!this.game.guessLocation) {
+            const mapCenter = this.game.mode === 'india' 
+                ? { lat: 22.5937, lng: 78.9629 } 
+                : { lat: 20, lng: 0 };
+            this.game.guessLocation = new google.maps.LatLng(mapCenter.lat, mapCenter.lng);
+        }
+        this.confirmGuess();
     }
 
     findStreetViewLocation(startLocation) {
@@ -198,6 +266,9 @@ class GameController {
 
     async confirmGuess() {
         if (!this.game.guessLocation) return;
+
+        // Stop the timer
+        this.stopTimer();
 
         const distance = google.maps.geometry.spherical.computeDistanceBetween(
             new google.maps.LatLng(this.game.currentLocation),
@@ -340,6 +411,7 @@ class GameController {
 
     quitGame() {
         if (confirm('Quit current game?')) {
+            this.stopTimer();
             if (this.game.isMultiplayer) {
                 multiplayerService.leaveGame();
             }
@@ -370,13 +442,25 @@ function initApp() {
     
     // Multiplayer game update handler
     window.multiplayerGameUpdate = (gameData) => {
-        if (gameData.status === 'playing' && gameData.opponent) {
-            if (document.getElementById('lobby-screen').classList.contains('hidden') === false) {
+        // When opponent joins, transition from matchmaking to lobby
+        if (gameData.status === 'waiting' && gameData.opponent) {
+            // Opponent just joined, show lobby
+            const matchmakingScreen = document.getElementById('matchmaking-screen');
+            if (!matchmakingScreen.classList.contains('hidden')) {
                 uiController.showLobby();
             }
         }
         
-        // Update multiplayer scores
+        // When game status changes to playing, ensure we're in the lobby and ready to start
+        if (gameData.status === 'playing' && gameData.opponent) {
+            const lobbyScreen = document.getElementById('lobby-screen');
+            if (!lobbyScreen.classList.contains('hidden')) {
+                // Already in lobby, this will trigger game start
+                uiController.showLobby();
+            }
+        }
+        
+        // Update multiplayer scores during game
         if (gameController.game.isMultiplayer) {
             const isHost = gameData.host.uid === authService.user.uid;
             const yourScore = isHost ? gameData.hostScore : gameData.opponentScore;

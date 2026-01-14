@@ -186,7 +186,7 @@ class MultiplayerService {
         return code;
     }
 
-    async createGame(mode) {
+    async createGame(mode, timeControl = 'unlimited') {
         if (!this.authService.user) return null;
         
         // Use authService's db
@@ -205,6 +205,7 @@ class MultiplayerService {
             },
             opponent: null,
             mode: mode,
+            timeControl: timeControl,
             status: 'waiting', // waiting, playing, finished
             currentRound: 1,
             totalRounds: 5,

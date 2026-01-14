@@ -3,6 +3,9 @@ class UIController {
     constructor(authService, multiplayerService) {
         this.auth = authService;
         this.multiplayer = multiplayerService;
+        this.pendingGameMode = null;
+        this.pendingIsMultiplayer = false;
+        this.multiplayerGameStarted = false;
         this.setupEventListeners();
     }
 
@@ -15,12 +18,18 @@ class UIController {
         document.getElementById('change-name-btn').addEventListener('click', () => this.handleChangeName());
 
         // Solo mode buttons
-        document.getElementById('solo-world-btn').addEventListener('click', () => this.startSoloGame('world'));
-        document.getElementById('solo-india-btn').addEventListener('click', () => this.startSoloGame('india'));
+        document.getElementById('solo-world-btn').addEventListener('click', () => this.showTimeSelection('world', false));
+        document.getElementById('solo-india-btn').addEventListener('click', () => this.showTimeSelection('india', false));
 
         // Multiplayer - Create game buttons
-        document.getElementById('create-world-btn').addEventListener('click', () => this.createMultiplayerGame('world'));
-        document.getElementById('create-india-btn').addEventListener('click', () => this.createMultiplayerGame('india'));
+        document.getElementById('create-world-btn').addEventListener('click', () => this.showTimeSelection('world', true));
+        document.getElementById('create-india-btn').addEventListener('click', () => this.showTimeSelection('india', true));
+        
+        // Time control selection
+        document.querySelectorAll('.time-option-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.selectTimeControl(btn.dataset.time));
+        });
+        document.getElementById('cancel-time-select-btn').addEventListener('click', () => this.hideTimeSelection());
         
         // Multiplayer - Join with room code
         document.getElementById('join-room-btn').addEventListener('click', () => this.joinRoomByCode());
@@ -62,17 +71,52 @@ class UIController {
         }
     }
 
-    startSoloGame(mode) {
-        window.gameController.startGame(mode, false);
+    showTimeSelection(mode, isMultiplayer) {
+        this.pendingGameMode = mode;
+        this.pendingIsMultiplayer = isMultiplayer;
+        document.getElementById('time-control-modal').classList.remove('hidden');
     }
 
-    async createMultiplayerGame(mode) {
+    hideTimeSelection() {
+        document.getElementById('time-control-modal').classList.add('hidden');
+        this.pendingGameMode = null;
+        this.pendingIsMultiplayer = false;
+    }
+
+    selectTimeControl(timeControl) {
+        const mode = this.pendingGameMode;
+        const isMultiplayer = this.pendingIsMultiplayer;
+        
+        this.hideTimeSelection();
+        
+        if (isMultiplayer) {
+            this.createMultiplayerGame(mode, timeControl);
+        } else {
+            this.startSoloGame(mode, timeControl);
+        }
+    }
+
+    startSoloGame(mode, timeControl = 'unlimited') {
+        window.gameController.startGame(mode, false, timeControl);
+    }
+
+    async createMultiplayerGame(mode, timeControl = 'unlimited') {
+        // First, ensure we're on the matchmaking screen
         this.showScreen('matchmaking-screen');
+        
+        // Reset game started flag
+        this.multiplayerGameStarted = false;
+        
+        // Store time control for when game starts
+        this.multiplayerTimeControl = timeControl;
+        
         try {
-            const roomCode = await this.multiplayer.createGame(mode);
+            const roomCode = await this.multiplayer.createGame(mode, timeControl);
             if (roomCode) {
                 document.getElementById('display-room-code').textContent = roomCode;
                 document.getElementById('matchmaking-status').textContent = 'Waiting for opponent to join...';
+            } else {
+                throw new Error('Failed to get room code');
             }
         } catch (error) {
             console.error('Create game error:', error);
@@ -96,6 +140,9 @@ class UIController {
         }
         
         try {
+            // Reset game started flag
+            this.multiplayerGameStarted = false;
+            
             const result = await this.multiplayer.joinGameByCode(code);
             if (result.success) {
                 this.showLobby();
@@ -125,11 +172,13 @@ class UIController {
 
     cancelMatchmaking() {
         this.multiplayer.leaveGame();
+        this.multiplayerGameStarted = false;
         this.showScreen('main-menu');
     }
 
     async leaveLobby() {
         await this.multiplayer.leaveGame();
+        this.multiplayerGameStarted = false;
         this.showScreen('main-menu');
     }
 
@@ -146,11 +195,17 @@ class UIController {
             document.getElementById('lobby-opponent').classList.remove('hidden');
             document.getElementById('lobby-opponent-name').textContent = gameData.opponent.displayName;
             
-            // Start game after short delay
-            document.getElementById('lobby-start-container').classList.remove('hidden');
-            setTimeout(() => {
-                window.gameController.startGame(gameData.mode, true);
-            }, 2000);
+            // Only start game once
+            if (!this.multiplayerGameStarted) {
+                this.multiplayerGameStarted = true;
+                
+                // Start game after short delay with time control from game data
+                document.getElementById('lobby-start-container').classList.remove('hidden');
+                setTimeout(() => {
+                    const timeControl = gameData.timeControl || 'unlimited';
+                    window.gameController.startGame(gameData.mode, true, timeControl);
+                }, 2000);
+            }
         }
     }
 

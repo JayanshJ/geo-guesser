@@ -20,6 +20,33 @@
         </div>
     </div>
 
+    <!-- Time Control Selection Modal -->
+    <div id="time-control-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Select Time Control</h2>
+            <p class="modal-description">Choose how much time you have per round</p>
+            <div class="time-options">
+                <button class="time-option-btn" data-time="60">
+                    <div class="time-value">1 min</div>
+                    <div class="time-label">Blitz</div>
+                </button>
+                <button class="time-option-btn" data-time="180">
+                    <div class="time-value">3 min</div>
+                    <div class="time-label">Rapid</div>
+                </button>
+                <button class="time-option-btn" data-time="300">
+                    <div class="time-value">5 min</div>
+                    <div class="time-label">Classic</div>
+                </button>
+                <button class="time-option-btn" data-time="unlimited">
+                    <div class="time-value">∞</div>
+                    <div class="time-label">Unlimited</div>
+                </button>
+            </div>
+            <button id="cancel-time-select-btn" class="btn btn-small">Cancel</button>
+        </div>
+    </div>
+
     <!-- Main Menu -->
     <div id="main-menu" class="screen hidden">
         <div class="menu-header">
@@ -122,6 +149,7 @@
                 <span id="game-mode-text">🌍 World Mode</span>
                 <span>Round: <strong id="current-round">1</strong>/5</span>
                 <span>Score: <strong id="current-score">0</strong></span>
+                <span id="timer-display" class="timer hidden">⏱️ <strong id="timer-value">0:00</strong></span>
             </div>
             <div id="multiplayer-scores" class="hidden">
                 <span class="mp-score">You: <strong id="your-mp-score">0</strong></span>
