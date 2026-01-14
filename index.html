@@ -151,6 +151,10 @@
                 <span>Score: <strong id="current-score">0</strong></span>
                 <span id="timer-display" class="timer hidden">⏱️ <strong id="timer-value">0:00</strong></span>
             </div>
+            <div class="timer-container">
+                <span class="timer-icon">⏱️</span>
+                <span id="round-timer" class="timer-display">2:00</span>
+            </div>
             <div id="multiplayer-scores" class="hidden">
                 <span class="mp-score">You: <strong id="your-mp-score">0</strong></span>
                 <span class="mp-score">Opp: <strong id="opponent-mp-score">0</strong></span>
@@ -218,6 +222,15 @@
             <div class="button-group">
                 <button id="play-again-btn" class="btn btn-primary">Back to Menu</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Opponent Left Modal -->
+    <div id="opponent-left-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>😔 Opponent Left</h2>
+            <p>Your opponent has left the game.</p>
+            <button id="opponent-left-ok-btn" class="btn btn-primary">Back to Menu</button>
         </div>
     </div>
 

@@ -669,6 +669,42 @@ body {
     }
 }
 
+/* Timer */
+.timer-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.timer-icon {
+    font-size: 1.2rem;
+}
+
+.timer-display {
+    min-width: 45px;
+    text-align: center;
+}
+
+.timer-display.warning {
+    color: #ffc107;
+    animation: timerPulse 1s infinite;
+}
+
+.timer-display.danger {
+    color: #ff4444;
+    animation: timerPulse 0.5s infinite;
+}
+
+@keyframes timerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
 /* Time Control Modal */
 .modal {
     position: fixed;
@@ -702,6 +738,11 @@ body {
     opacity: 0.9;
     margin-bottom: 30px;
     font-size: 1.1rem;
+}
+
+.modal-content p {
+    margin-bottom: 25px;
+    opacity: 0.9;
 }
 
 .time-options {
