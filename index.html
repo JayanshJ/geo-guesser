@@ -183,29 +183,21 @@
     <div id="lobby-screen" class="screen hidden">
         <div class="lobby-container">
             <h2>Game Lobby</h2>
-            <div class="players-container">
-                <div class="player-card">
-                    <span class="player-avatar-text" id="lobby-host-avatar">🎮</span>
-                    <div id="lobby-host-name" class="player-name"></div>
-                    <div class="player-label">You</div>
-                </div>
-                <div class="vs-text">VS</div>
-                <div class="player-card">
-                    <div id="lobby-waiting" class="waiting-player">
-                        <div class="spinner-small"></div>
-                        <div>Waiting...</div>
-                    </div>
-                    <div id="lobby-opponent" class="hidden">
-                        <span class="player-avatar-text" id="lobby-opponent-avatar">🎯</span>
-                        <div id="lobby-opponent-name" class="player-name"></div>
-                        <div class="player-label">Opponent</div>
-                    </div>
-                </div>
+            <div class="room-code-display-lobby">
+                <p>Room Code: <span id="lobby-room-code" class="room-code-text">------</span></p>
+                <button id="copy-lobby-code-btn" class="btn btn-small">📋 Copy</button>
             </div>
-            <div id="lobby-start-container" class="hidden">
-                <p class="lobby-message">Game starting...</p>
+            <div class="lobby-info">
+                <p id="lobby-player-count">Players: 1/8</p>
+                <p id="lobby-game-mode">Mode: 🌍 World</p>
             </div>
-            <button id="leave-lobby-btn" class="btn btn-small">Leave</button>
+            <div id="lobby-players-grid" class="lobby-players-grid">
+                <!-- Players will be dynamically added here -->
+            </div>
+            <div id="lobby-actions" class="lobby-actions">
+                <button id="start-game-btn" class="btn btn-primary hidden">Start Game</button>
+                <button id="leave-lobby-btn" class="btn btn-small">Leave</button>
+            </div>
         </div>
     </div>
 
@@ -275,8 +267,7 @@
                 <span id="timer-display" class="timer hidden">⏱️ <strong id="timer-value">0:00</strong></span>
             </div>
             <div id="multiplayer-scores" class="hidden">
-                <span class="mp-score">You: <strong id="your-mp-score">0</strong></span>
-                <span class="mp-score">Opp: <strong id="opponent-mp-score">0</strong></span>
+                <!-- Scores will be dynamically added here for all players -->
             </div>
             <button id="quit-btn" class="btn btn-small">Quit</button>
         </div>
@@ -332,9 +323,8 @@
             </div>
             <div id="mp-final-result" class="hidden">
                 <h2 id="mp-result-text">You Win!</h2>
-                <div class="mp-final-scores">
-                    <div>You: <strong id="mp-your-final">0</strong></div>
-                    <div>Opponent: <strong id="mp-opponent-final">0</strong></div>
+                <div id="mp-final-standings" class="mp-final-standings">
+                    <!-- Player standings will be dynamically added here -->
                 </div>
             </div>
             <div class="round-summary" id="round-summary"></div>

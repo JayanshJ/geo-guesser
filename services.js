@@ -805,7 +805,7 @@ class MultiplayerService {
         return locations;
     }
 
-    async createGame(mode, timeControl = 'unlimited') {
+    async createGame(mode, timeControl = 'unlimited', maxPlayers = 8) {
         if (!this.authService.user) return null;
         
         // Use authService's db
@@ -814,7 +814,7 @@ class MultiplayerService {
         // Generate a unique room code
         this.roomCode = this.generateRoomCode();
         
-        // Generate locations for the game (so both players get the same ones)
+        // Generate locations for the game (so all players get the same ones)
         const locations = this.generateLocationsForMode(mode, 5);
         
         const gameRef = this.db.collection('multiplayer_games').doc(this.roomCode);
@@ -825,17 +825,23 @@ class MultiplayerService {
                 uid: this.authService.user.uid,
                 displayName: this.authService.user.displayName
             },
-            opponent: null,
             mode: mode,
             timeControl: timeControl,
             status: 'waiting', // waiting, playing, finished
             currentRound: 1,
             totalRounds: 5,
+            maxPlayers: maxPlayers,
             locations: locations,
-            hostGuesses: {},
-            opponentGuesses: {},
-            hostScore: 0,
-            opponentScore: 0,
+            players: {
+                [this.authService.user.uid]: {
+                    uid: this.authService.user.uid,
+                    displayName: this.authService.user.displayName,
+                    isHost: true,
+                    score: 0,
+                    guesses: {},
+                    joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }
+            },
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
@@ -866,26 +872,47 @@ class MultiplayerService {
             return { success: false, error: 'This game has already started.' };
         }
         
-        if (gameData.host.uid === this.authService.user.uid) {
-            return { success: false, error: 'You cannot join your own game!' };
+        // Check if player already in game
+        if (gameData.players && gameData.players[this.authService.user.uid]) {
+            // Player is already in the game, just reconnect
+            this.roomCode = code;
+            this.currentGame = { ref: gameRef, data: gameData };
+            this.listenToGame(code);
+            return { success: true };
         }
         
+        // Check max players
+        const currentPlayerCount = gameData.players ? Object.keys(gameData.players).length : 0;
+        if (currentPlayerCount >= gameData.maxPlayers) {
+            return { success: false, error: 'This room is full.' };
+        }
+        
+        // Add player to game
         await gameRef.update({
-            opponent: {
+            [`players.${this.authService.user.uid}`]: {
                 uid: this.authService.user.uid,
-                displayName: this.authService.user.displayName
-            },
-            status: 'playing'
+                displayName: this.authService.user.displayName,
+                isHost: false,
+                score: 0,
+                guesses: {},
+                joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }
         });
         
-        // Set currentGame immediately with updated data so showLobby() can access it
+        // Set currentGame immediately
         const updatedGameData = {
             ...gameData,
-            opponent: {
-                uid: this.authService.user.uid,
-                displayName: this.authService.user.displayName
-            },
-            status: 'playing'
+            players: {
+                ...gameData.players,
+                [this.authService.user.uid]: {
+                    uid: this.authService.user.uid,
+                    displayName: this.authService.user.displayName,
+                    isHost: false,
+                    score: 0,
+                    guesses: {},
+                    joinedAt: new Date()
+                }
+            }
         };
         this.currentGame = { ref: gameRef, data: updatedGameData };
         
@@ -912,18 +939,16 @@ class MultiplayerService {
     async submitGuess(round, location, distance, points) {
         if (!this.currentGame || !this.authService.user) return;
         
-        const isHost = this.currentGame.data.host.uid === this.authService.user.uid;
-        const guessField = isHost ? 'hostGuesses' : 'opponentGuesses';
-        const scoreField = isHost ? 'hostScore' : 'opponentScore';
+        const uid = this.authService.user.uid;
         
         await this.currentGame.ref.update({
-            [`${guessField}.${round}`]: {
+            [`players.${uid}.guesses.${round}`]: {
                 location: location,
                 distance: distance,
                 points: points,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             },
-            [scoreField]: firebase.firestore.FieldValue.increment(points)
+            [`players.${uid}.score`]: firebase.firestore.FieldValue.increment(points)
         });
     }
 
@@ -937,6 +962,29 @@ class MultiplayerService {
         } catch (e) {
             console.error('Error saving resolved location:', e);
         }
+    }
+
+    async startGame() {
+        if (!this.currentGame) return { success: false, error: 'No active game' };
+        
+        // Check if user is host
+        const isHost = this.currentGame.data.host.uid === this.authService.user.uid;
+        if (!isHost) {
+            return { success: false, error: 'Only the host can start the game' };
+        }
+        
+        // Check if there are at least 2 players
+        const playerCount = this.currentGame.data.players ? Object.keys(this.currentGame.data.players).length : 0;
+        if (playerCount < 2) {
+            return { success: false, error: 'Need at least 2 players to start' };
+        }
+        
+        await this.currentGame.ref.update({
+            status: 'playing',
+            startedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: true };
     }
 
     onGameUpdate(gameData) {
@@ -974,12 +1022,31 @@ class MultiplayerService {
             this.gameListener = null;
         }
         
-        // If we're the host and game is still waiting, delete it
-        if (this.currentGame && this.currentGame.data.status === 'waiting') {
+        // Remove player from game
+        if (this.currentGame && this.authService.user) {
             try {
-                await this.currentGame.ref.delete();
+                const gameData = this.currentGame.data;
+                const isHost = gameData.host.uid === this.authService.user.uid;
+                
+                if (gameData.status === 'waiting') {
+                    if (isHost) {
+                        // Host leaving waiting room, delete the game
+                        await this.currentGame.ref.delete();
+                    } else {
+                        // Non-host leaving, remove from players
+                        await this.currentGame.ref.update({
+                            [`players.${this.authService.user.uid}`]: firebase.firestore.FieldValue.delete()
+                        });
+                    }
+                } else if (gameData.status === 'playing') {
+                    // Game in progress, mark player as left
+                    await this.currentGame.ref.update({
+                        [`players.${this.authService.user.uid}.hasLeft`]: true,
+                        [`players.${this.authService.user.uid}.leftAt`]: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
             } catch (e) {
-                console.log('Could not delete game:', e);
+                console.log('Could not update game:', e);
             }
         }
         

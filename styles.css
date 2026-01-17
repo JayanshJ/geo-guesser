@@ -352,7 +352,68 @@ body {
 
 .lobby-container {
     text-align: center;
-    max-width: 600px;
+    max-width: 800px;
+    padding: 20px;
+}
+
+.room-code-display-lobby {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.room-code-text {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #4CAF50;
+    letter-spacing: 3px;
+}
+
+.lobby-info {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin: 20px 0;
+    font-size: 1.1rem;
+}
+
+.lobby-players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.lobby-player-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.lobby-player-card:hover {
+    transform: scale(1.05);
+}
+
+.lobby-player-card.is-host {
+    border: 2px solid #FFD700;
+}
+
+.lobby-player-card.is-you {
+    border: 2px solid #4CAF50;
+}
+
+.lobby-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 30px;
 }
 
 .players-container {
@@ -643,6 +704,28 @@ body {
     gap: 40px;
     font-size: 1.3rem;
     margin-top: 20px;
+}
+
+.mp-final-standings {
+    margin-top: 20px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.mp-final-standings h3 {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.mp-player-final-score {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    margin: 10px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 1.2rem;
 }
 
 .round-summary {

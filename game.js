@@ -84,14 +84,39 @@ class GameController {
         
         if (isMultiplayer) {
             document.getElementById('multiplayer-scores').classList.remove('hidden');
-            document.getElementById('your-mp-score').textContent = '0';
-            document.getElementById('opponent-mp-score').textContent = '0';
+            this.updateMultiplayerScores(multiplayerService.currentGame.data);
         } else {
             document.getElementById('multiplayer-scores').classList.add('hidden');
         }
 
         this.showScreen('game-screen');
         this.loadRound();
+    }
+    
+    updateMultiplayerScores(gameData) {
+        if (!gameData || !gameData.players) return;
+        
+        const scoresContainer = document.getElementById('multiplayer-scores');
+        scoresContainer.innerHTML = '';
+        
+        // Sort players by score (descending)
+        const sortedPlayers = Object.values(gameData.players).sort((a, b) => b.score - a.score);
+        
+        sortedPlayers.forEach(player => {
+            const isYou = player.uid === authService.user.uid;
+            const scoreSpan = document.createElement('span');
+            scoreSpan.className = 'mp-score';
+            scoreSpan.innerHTML = `${isYou ? '<strong>You</strong>' : player.displayName}: <strong>${player.score}</strong>`;
+            scoresContainer.appendChild(scoreSpan);
+        });
+        
+        // Sync resolved locations for non-host
+        if (!this.game.isHost && gameData.resolvedLocations) {
+            const resolvedArr = Array.isArray(gameData.resolvedLocations) 
+                ? gameData.resolvedLocations 
+                : Object.values(gameData.resolvedLocations);
+            this.game.resolvedLocations = resolvedArr;
+        }
     }
 
     getLocationsForMode() {
@@ -496,18 +521,25 @@ class GameController {
         }
     }
 
-    checkBothPlayersFinished(gameData) {
+    checkAllPlayersFinished(gameData) {
         if (!this.game.isMultiplayer) return;
         if (this.advancingToNextRound) return; // Prevent multiple triggers
         
         const currentRound = this.game.round;
-        const hostGuess = gameData.hostGuesses && gameData.hostGuesses[currentRound];
-        const opponentGuess = gameData.opponentGuesses && gameData.opponentGuesses[currentRound];
+        const players = gameData.players || {};
         
-        if (hostGuess && opponentGuess) {
-            // Both players have submitted - show brief result then auto-advance
+        // Check if all players have submitted their guess for this round
+        const allPlayersFinished = Object.values(players).every(player => {
+            return player.guesses && player.guesses[currentRound];
+        });
+        
+        if (allPlayersFinished) {
+            // All players have submitted - show brief result then auto-advance
             this.advancingToNextRound = true;
-            document.getElementById('mp-waiting-message').textContent = 'Both finished! Moving on...';
+            const waitingMsg = document.getElementById('mp-waiting-message');
+            if (waitingMsg) {
+                waitingMsg.textContent = 'All players finished! Moving on...';
+            }
             
             setTimeout(() => {
                 this.advancingToNextRound = false;
@@ -535,16 +567,33 @@ class GameController {
 
         if (this.game.isMultiplayer) {
             const gameData = multiplayerService.currentGame.data;
-            const opponentScore = gameData.host.uid === authService.user.uid
-                ? gameData.opponentScore
-                : gameData.hostScore;
-
+            const players = gameData.players || {};
+            const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
+            
+            // Show multiplayer results
             document.getElementById('mp-final-result').classList.remove('hidden');
-            document.getElementById('mp-your-final').textContent = this.game.score;
-            document.getElementById('mp-opponent-final').textContent = opponentScore;
-            document.getElementById('mp-result-text').textContent =
-                this.game.score > opponentScore ? '🏆 You Win!' :
-                this.game.score < opponentScore ? '😞 You Lost' : '🤝 Draw!';
+            
+            // Determine your position
+            const yourIndex = sortedPlayers.findIndex(p => p.uid === authService.user.uid);
+            const resultText = yourIndex === 0 ? '🏆 You Win!' : 
+                              yourIndex === sortedPlayers.length - 1 ? 'Better luck next time!' : 
+                              `#${yourIndex + 1} Place`;
+            document.getElementById('mp-result-text').textContent = resultText;
+            
+            // Show all player scores
+            const mpStandingsDiv = document.getElementById('mp-final-standings');
+            mpStandingsDiv.innerHTML = '<h3>Final Standings</h3>';
+            
+            sortedPlayers.forEach((player, index) => {
+                const isYou = player.uid === authService.user.uid;
+                const playerScore = document.createElement('div');
+                playerScore.className = 'mp-player-final-score';
+                playerScore.innerHTML = `
+                    <span>${index + 1}. ${isYou ? '<strong>You</strong>' : player.displayName}</span>
+                    <span style="color: #4CAF50; font-weight: bold;">${player.score} pts</span>
+                `;
+                mpStandingsDiv.appendChild(playerScore);
+            });
         }
 
         if (!this.game.isMultiplayer && authService.user) {
@@ -599,46 +648,40 @@ function initApp() {
     
     // Multiplayer game update handler
     window.multiplayerGameUpdate = (gameData) => {
-        // When opponent joins, transition from matchmaking to lobby
-        if (gameData.status === 'waiting' && gameData.opponent) {
-            // Opponent just joined, show lobby
+        // Update lobby if we're in it
+        const lobbyScreen = document.getElementById('lobby-screen');
+        if (!lobbyScreen.classList.contains('hidden')) {
+            uiController.updateLobbyPlayers(gameData);
+        }
+        
+        // When players join while in matchmaking, show lobby
+        if (gameData.status === 'waiting') {
             const matchmakingScreen = document.getElementById('matchmaking-screen');
             if (!matchmakingScreen.classList.contains('hidden')) {
-                uiController.showLobby();
+                const playerCount = gameData.players ? Object.keys(gameData.players).length : 0;
+                if (playerCount > 1) {
+                    uiController.showLobby();
+                }
             }
         }
         
-        // When game status changes to playing, ensure we're in the lobby and ready to start
-        if (gameData.status === 'playing' && gameData.opponent) {
+        // When game status changes to playing, ensure we're ready to start
+        if (gameData.status === 'playing') {
             const lobbyScreen = document.getElementById('lobby-screen');
             const matchmakingScreen = document.getElementById('matchmaking-screen');
             if (!lobbyScreen.classList.contains('hidden') || !matchmakingScreen.classList.contains('hidden')) {
-                uiController.showLobby();
+                uiController.updateLobbyPlayers(gameData);
             }
         }
         
         // Update multiplayer scores during game
         if (gameController.game.isMultiplayer) {
-            const isHost = gameData.host.uid === authService.user.uid;
-            const yourScore = isHost ? gameData.hostScore : gameData.opponentScore;
-            const oppScore = isHost ? gameData.opponentScore : gameData.hostScore;
+            gameController.updateMultiplayerScores(gameData);
             
-            document.getElementById('your-mp-score').textContent = yourScore;
-            document.getElementById('opponent-mp-score').textContent = oppScore;
-            
-            // Sync resolved locations for opponent
-            if (!isHost && gameData.resolvedLocations) {
-                // Convert object to array if needed
-                const resolvedArr = Array.isArray(gameData.resolvedLocations) 
-                    ? gameData.resolvedLocations 
-                    : Object.values(gameData.resolvedLocations);
-                gameController.game.resolvedLocations = resolvedArr;
-            }
-            
-            // Check if both players finished this round and auto-advance
+            // Check if all players finished this round and auto-advance
             const resultScreenVisible = document.getElementById('result-screen').classList.contains('hidden') === false;
             if (resultScreenVisible) {
-                gameController.checkBothPlayersFinished(gameData);
+                gameController.checkAllPlayersFinished(gameData);
             }
         }
     };

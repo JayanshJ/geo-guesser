@@ -84,6 +84,8 @@ class UIController {
         // Matchmaking
         document.getElementById('cancel-matchmaking-btn').addEventListener('click', () => this.cancelMatchmaking());
         document.getElementById('leave-lobby-btn').addEventListener('click', () => this.leaveLobby());
+        document.getElementById('copy-lobby-code-btn').addEventListener('click', () => this.copyLobbyCode());
+        document.getElementById('start-game-btn').addEventListener('click', () => this.startMultiplayerGame());
 
         // Game controls
         document.getElementById('play-again-btn').addEventListener('click', () => this.backToMenu());
@@ -219,6 +221,28 @@ class UIController {
         this.multiplayerGameStarted = false;
         this.showScreen('main-menu');
     }
+    
+    copyLobbyCode() {
+        const code = document.getElementById('lobby-room-code').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            const btn = document.getElementById('copy-lobby-code-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('Could not copy code:', err);
+        });
+    }
+    
+    async startMultiplayerGame() {
+        const result = await this.multiplayer.startGame();
+        if (!result.success) {
+            alert(result.error);
+        }
+        // Game will auto-start when status changes to 'playing'
+    }
 
     showLobby() {
         this.showScreen('lobby-screen');
@@ -227,27 +251,70 @@ class UIController {
         console.log('[Lobby] Game data:', gameData);
         console.log('[Lobby] TimeControl from gameData:', gameData.timeControl);
         
-        // Show host info
-        document.getElementById('lobby-host-name').textContent = gameData.host.displayName;
-
-        // Show opponent if joined
-        if (gameData.opponent) {
-            document.getElementById('lobby-waiting').classList.add('hidden');
-            document.getElementById('lobby-opponent').classList.remove('hidden');
-            document.getElementById('lobby-opponent-name').textContent = gameData.opponent.displayName;
+        // Show room code
+        document.getElementById('lobby-room-code').textContent = gameData.roomCode;
+        
+        // Show game mode
+        const modeEmoji = gameData.mode === 'india' ? '🇮🇳' : '🌍';
+        const modeText = gameData.mode === 'india' ? 'India' : 'World';
+        document.getElementById('lobby-game-mode').textContent = `Mode: ${modeEmoji} ${modeText}`;
+        
+        // Update players
+        this.updateLobbyPlayers(gameData);
+    }
+    
+    updateLobbyPlayers(gameData) {
+        const playersGrid = document.getElementById('lobby-players-grid');
+        const players = gameData.players || {};
+        const playerCount = Object.keys(players).length;
+        const maxPlayers = gameData.maxPlayers || 8;
+        
+        // Update player count
+        document.getElementById('lobby-player-count').textContent = `Players: ${playerCount}/${maxPlayers}`;
+        
+        // Clear grid
+        playersGrid.innerHTML = '';
+        
+        // Add each player
+        Object.values(players).forEach(player => {
+            const isYou = player.uid === this.auth.user.uid;
+            const isHost = player.isHost;
             
-            // Only start game once
-            if (!this.multiplayerGameStarted) {
-                this.multiplayerGameStarted = true;
-                
-                // Start game after short delay with time control from game data
-                document.getElementById('lobby-start-container').classList.remove('hidden');
-                setTimeout(() => {
-                    const timeControl = gameData.timeControl || 'unlimited';
-                    console.log('[Lobby] Starting game with timeControl:', timeControl);
-                    window.gameController.startGame(gameData.mode, true, timeControl);
-                }, 2000);
-            }
+            const playerCard = document.createElement('div');
+            playerCard.className = 'lobby-player-card';
+            if (isHost) playerCard.classList.add('is-host');
+            if (isYou) playerCard.classList.add('is-you');
+            
+            playerCard.innerHTML = `
+                <div class="player-avatar-text">${isHost ? '👑' : '🎮'}</div>
+                <div class="player-name">${player.displayName}</div>
+                <div class="player-label">${isYou ? 'You' : (isHost ? 'Host' : 'Player')}</div>
+            `;
+            
+            playersGrid.appendChild(playerCard);
+        });
+        
+        // Show/hide start button for host
+        const startBtn = document.getElementById('start-game-btn');
+        const isHost = gameData.host.uid === this.auth.user.uid;
+        
+        if (isHost && gameData.status === 'waiting') {
+            startBtn.classList.remove('hidden');
+            startBtn.disabled = playerCount < 2;
+            startBtn.textContent = playerCount < 2 ? 'Waiting for players...' : 'Start Game';
+        } else {
+            startBtn.classList.add('hidden');
+        }
+        
+        // Auto-start game when status changes to playing
+        if (gameData.status === 'playing' && !this.multiplayerGameStarted) {
+            this.multiplayerGameStarted = true;
+            
+            setTimeout(() => {
+                const timeControl = gameData.timeControl || 'unlimited';
+                console.log('[Lobby] Starting game with timeControl:', timeControl);
+                window.gameController.startGame(gameData.mode, true, timeControl);
+            }, 2000);
         }
     }
 
