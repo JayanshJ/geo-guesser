@@ -7,6 +7,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 ## 🌟 Key Features
 
 ### Room Creation & Management
+
 - ✅ Create rooms with unique 6-character codes
 - ✅ Support for up to 8 players per room
 - ✅ Host controls when the game starts
@@ -14,6 +15,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 - ✅ One-click room code copying
 
 ### Enhanced Lobby
+
 - ✅ Live player grid showing all participants
 - ✅ Visual indicators (👑 for host, highlights for you)
 - ✅ Player count display (e.g., "3/8")
@@ -21,6 +23,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 - ✅ Start button for host (requires 2+ players)
 
 ### In-Game Experience
+
 - ✅ Dynamic scoreboard showing all players
 - ✅ Real-time score updates
 - ✅ Auto-sorted leaderboard (highest score first)
@@ -28,6 +31,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 - ✅ Same locations for all players (fair competition)
 
 ### Final Results
+
 - ✅ Full player rankings
 - ✅ Position-based messages (#1, #2, etc.)
 - ✅ Complete scoreboard with all players
@@ -50,6 +54,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 ## 🚀 How to Use
 
 ### As Host:
+
 ```
 1. Click "Create World Game" or "Create India Game"
 2. Share the room code with friends
@@ -58,6 +63,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 ```
 
 ### As Player:
+
 ```
 1. Get room code from host
 2. Enter code and click "Join"
@@ -68,11 +74,13 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 ## 🔧 Technical Highlights
 
 ### Data Structure
+
 - Migrated from 1v1 `host`/`opponent` model to flexible `players` object
 - Each player tracked independently with scores and guesses
 - Firestore real-time synchronization for all players
 
 ### Smart Features
+
 - Auto-advance only when ALL players finish (no one left behind)
 - Host can leave waiting room to cancel (game deleted)
 - Players can rejoin if disconnected (same UID)
@@ -81,6 +89,7 @@ Your GeoGuesser game now supports **multi-player rooms** where up to **8 players
 ## 🎯 Configuration
 
 Default settings:
+
 - **Max Players**: 8 per room
 - **Min Players**: 2 to start
 - **Auto-advance delay**: 2 seconds after all players finish
@@ -90,6 +99,7 @@ To change max players, edit the `createGame()` call in ui-controller.js.
 ## ✨ Future Enhancements
 
 Potential additions:
+
 - [ ] Private/public room toggle
 - [ ] Kick player functionality
 - [ ] Spectator mode
@@ -102,6 +112,7 @@ Potential additions:
 ## 🐛 Testing
 
 All core functionality has been implemented and is ready for testing:
+
 - Room creation and joining
 - Lobby player management
 - Live score updates
@@ -111,6 +122,7 @@ All core functionality has been implemented and is ready for testing:
 ## 📞 Support
 
 For questions about the implementation, refer to:
+
 - **MULTIPLAYER_ROOMS.md** for technical details
 - **QUICK_START.md** for user instructions
 - **CHANGES_SUMMARY.md** for what changed

@@ -3,7 +3,9 @@
 ## Files Modified
 
 ### 1. services.js
+
 **Changes to MultiplayerService class:**
+
 - Modified `createGame()` to support multiple players with configurable max capacity (default 8)
 - Changed data structure from `host`/`opponent` to `players` object with player UIDs as keys
 - Updated `joinGameByCode()` to add players to the `players` object instead of single opponent
@@ -13,7 +15,9 @@
 - Updated `leaveGame()` to handle player removal properly
 
 ### 2. index.html
+
 **Lobby Screen Updates:**
+
 - Replaced fixed 1v1 player display with dynamic player grid
 - Added room code display with copy button
 - Added player count display (e.g., "Players: 3/8")
@@ -22,11 +26,14 @@
 - Removed hardcoded opponent elements
 
 **Game Screen Updates:**
+
 - Removed hardcoded multiplayer score elements
 - Made scores container dynamic to show all players
 
 ### 3. styles.css
+
 **New Styles Added:**
+
 - `.room-code-display-lobby` - Display room code in lobby
 - `.room-code-text` - Styled room code text
 - `.lobby-info` - Info section in lobby
@@ -38,18 +45,23 @@
 - `.mp-player-final-score` - Final score display for each player
 
 ### 4. ui-controller.js
+
 **New/Updated Methods:**
+
 - `showLobby()` - Completely rewritten to display room code, mode, and player grid
 - `updateLobbyPlayers(gameData)` - New method to dynamically update player list
 - `copyLobbyCode()` - New method to copy room code to clipboard
 - `startMultiplayerGame()` - New method for host to start game
 
 **Event Listeners Added:**
+
 - Copy lobby code button
 - Start game button
 
 ### 5. game.js
+
 **New/Updated Methods:**
+
 - `updateMultiplayerScores(gameData)` - New method to display all player scores dynamically
 - `checkAllPlayersFinished(gameData)` - Renamed and updated from `checkBothPlayersFinished` to handle multiple players
 - `showFinalScore()` - Completely rewritten to show ranked leaderboard for all players
@@ -58,12 +70,14 @@
 ## Key Behavioral Changes
 
 ### Before (1v1 Only)
+
 - Fixed host vs opponent structure
 - Auto-started when 2nd player joined
 - Showed "You vs Opponent" scores
 - Simple win/lose/draw display
 
 ### After (Multi-Player)
+
 - Dynamic players structure supporting up to 8 players
 - Host manually starts when ready (minimum 2 players)
 - Shows all player scores sorted by rank
@@ -74,6 +88,7 @@
 ## Data Structure Changes
 
 ### Old Structure
+
 ```javascript
 {
   host: { uid, displayName },
@@ -86,6 +101,7 @@
 ```
 
 ### New Structure
+
 ```javascript
 {
   host: { uid, displayName },
@@ -93,7 +109,7 @@
   players: {
     [uid]: {
       uid, displayName, isHost,
-      score, guesses: {}, 
+      score, guesses: {},
       hasLeft, leftAt
     }
   }

@@ -62,19 +62,23 @@
 ## Troubleshooting
 
 **"Room not found"**
+
 - Check the room code for typos
 - Ask the host to verify they shared the correct code
 - The room might have already started or been deleted
 
 **"This room is full"**
+
 - The room has reached maximum capacity (8 players)
 - Ask the host to create a new room
 
 **"This game has already started"**
+
 - You tried to join after the game began
 - Wait for the current game to finish or ask for a new room code
 
 **Game won't start**
+
 - Host needs at least 2 players to start
 - Make sure the host clicks the "Start Game" button
 
