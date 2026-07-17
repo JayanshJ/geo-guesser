@@ -1,5 +1,7 @@
 # API Keys and Config
-config.js
+# Legacy root-level config.js (held secrets). Anchored to root so it does NOT
+# match src/config.js, which is a legit source file that reads Vite env vars.
+/config.js
 .env
 .env.local
 .env.*.local
