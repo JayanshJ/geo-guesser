@@ -5,43 +5,21 @@
 import { authService } from '../services/auth.js';
 import { multiplayerService } from '../services/multiplayer.js';
 import { CONFIG } from '../config.js';
-import { LocationGenerator, getModeMeta, computeScore } from './locations.js';
+import { LocationGenerator, getModeMeta, computeScore, computeSpeedBonus, computeStreakMultiplier, STREAK_THRESHOLD_KM } from './locations.js';
 import { computeNewRating, DEFAULT_RATING } from './elo.js';
-
-// Dark "retro arcade" map theme: deep purple landmasses, pink/blue roads,
-// dark water, yellow road labels. Applied to the in-game guess map and the
-// round result map so they match the rest of the UI instead of clashing as
-// bright default Google Maps.
-const ARCADE_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#1a1033' }] },
-  { elementType: 'geometry.stroke', stylers: [{ color: '#2e2360' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1033' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#ffd23f' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#ff7a9c' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#ff7a9c' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#ff7a9c' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#241a47' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d7dff' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ff3b6b' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#e0285a' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#2d7dff' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#3a2c6e' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2e2360' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d0820' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5a4a8a' }] },
-  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#241a47' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#241a47' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2e2360' }] },
-  { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#ff3b6b' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'geometry.stroke', stylers: [{ color: '#2e2360' }] },
-];
+import { arcadeFX } from './arcade.js';
+import { detectRoundAchievements, pinEmoji } from './achievements.js';
+import { ARCADE_MAP_STYLE } from './mapStyle.js';
 
 class GameController {
   constructor() {
     this.game = {
       round: 1,
       totalRounds: 5,
-      score: 0,
+      score: 0,            // arcade total (base + speed/streak bonuses) — leaderboard/display
+      baseScore: 0,        // distance-only total — used for ranked ELO (kept pure)
+      streak: 0,           // consecutive sub-500m guess count (resets per game)
+      roundStartTime: null, // wall-clock when the current round's timer started
       currentLocation: null,
       guessLocation: null,
       roundResults: [],
@@ -120,6 +98,8 @@ class GameController {
 
     this.game.round = 1;
     this.game.score = 0;
+    this.game.baseScore = 0;
+    this.game.streak = 0;
     this.game.roundResults = [];
     this.game.guessLocation = null;
     this.game.mode = mode;
@@ -209,6 +189,7 @@ class GameController {
   loadRound() {
     document.getElementById('current-round').textContent = this.game.round;
     document.getElementById('current-score').textContent = this.game.score;
+    this.resetRoundHUD();
 
     this.game.guessLocation = null;
     document.getElementById('confirm-guess-btn').disabled = true;
@@ -261,6 +242,10 @@ class GameController {
     this.stopTimer();
     console.log('[Timer] Starting timer. timeControl:', this.game.timeControl, 'isHost:', this.game.isHost, 'isMultiplayer:', this.game.isMultiplayer);
 
+    // Stamp the round start so confirmGuess can compute a speed bonus. Set
+    // even for unlimited (harmless — computeSpeedBonus returns 0 then).
+    this.game.roundStartTime = Date.now();
+
     if (this.game.timeControl === 'unlimited') {
       document.getElementById('timer-display').classList.add('hidden');
       return;
@@ -305,6 +290,8 @@ class GameController {
       const mapCenter = getModeMeta(this.game.mode).mapCenter;
       this.game.guessLocation = new google.maps.LatLng(mapCenter.lat, mapCenter.lng);
     }
+    this.game.timedOutThisRound = true;
+    arcadeFX.playBuzzer();
     this.confirmGuess();
   }
 
@@ -458,14 +445,39 @@ class GameController {
 
   placeGuessMarker(latLng) {
     if (this.game.guessMarker) this.game.guessMarker.setMap(null);
-    this.game.guessMarker = new google.maps.Marker({
+    const markerOpts = {
       position: latLng,
       map: this.game.map,
       title: 'Your Guess',
       animation: google.maps.Animation.DROP,
-    });
+    };
+    // Custom guess pin: an emoji rendered as an SVG data-URI icon. The active
+    // pin is chosen on the profile screen and stored in localStorage (a purely
+    // cosmetic client preference, so no backend write needed).
+    const icon = this.getSelectedPinIcon();
+    if (icon) markerOpts.icon = icon;
+    this.game.guessMarker = new google.maps.Marker(markerOpts);
     this.game.guessLocation = latLng;
     document.getElementById('confirm-guess-btn').disabled = false;
+  }
+
+  // Build a Google Maps marker icon from the selected pin's emoji. Returns
+  // null for the default pin (Google's red marker). Emoji is rendered into a
+  // small SVG so it scales crisply and matches the arcade aesthetic.
+  getSelectedPinIcon() {
+    const pinId = localStorage.getItem('geoguesser_selected_pin') || 'default';
+    if (pinId === 'default') return null;
+    const emoji = pinEmoji(pinId);
+    if (!emoji) return null;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+      <path d="M18 0C8 0 0 8 0 18c0 13 18 26 18 26s18-13 18-26C36 8 28 0 18 0z" fill="#ff3b6b" stroke="#fff" stroke-width="2"/>
+      <text x="18" y="22" font-size="16" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
+    </svg>`;
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(36, 44),
+      anchor: new google.maps.Point(18, 42),
+    };
   }
 
   async confirmGuess() {
@@ -479,7 +491,23 @@ class GameController {
 
     // Decay is mode-dependent (smaller regions use a tighter decay).
     const decayFactor = getModeMeta(this.game.mode).decayFactor;
-    const points = computeScore(distance, decayFactor);
+    const basePoints = computeScore(distance, decayFactor);
+
+    // Arcade bonuses (speed + streak). These are display/leaderboard only —
+    // they do NOT feed ranked ELO, which is computed from baseScore only.
+    const timeUsedSec = this.game.roundStartTime
+      ? (Date.now() - this.game.roundStartTime) / 1000
+      : 0;
+    const newStreak = distance < STREAK_THRESHOLD_KM ? this.game.streak + 1 : 0;
+    const streakMult = computeStreakMultiplier(newStreak);
+    const speedBonus = computeSpeedBonus(timeUsedSec, this.game.timeControl);
+    const arcadeBonus = Math.min(1000, speedBonus * streakMult);
+    const points = basePoints + arcadeBonus;
+
+    this.game.streak = newStreak;
+    this.game.baseScore += basePoints;
+    this.game.score += points;
+    this.updateStreakHUD(streakMult, speedBonus, arcadeBonus);
 
     const result = {
       round: this.game.round,
@@ -489,17 +517,70 @@ class GameController {
         lng: this.game.guessLocation.lng(),
       },
       distance,
+      basePoints,
+      speedBonus,
+      streakMult,
+      arcadeBonus,
       points,
     };
 
     this.game.roundResults.push(result);
-    this.game.score += points;
 
     if (this.game.isMultiplayer) {
-      await multiplayerService.submitGuess(this.game.round, result.guessLocation, distance, points);
+      await multiplayerService.submitGuess(this.game.round, result.guessLocation, distance, points, basePoints);
+    }
+
+    // Arcade juice: chiptune sound for the round + confetti on a bullseye.
+    arcadeFX.playRoundSound(result, this.game.timedOutThisRound);
+    if (result.distance < 1) arcadeFX.confettiBurst();
+    this.game.timedOutThisRound = false;
+
+    // Achievements: bullseye / perfect round are detectable from this round.
+    // Unlock asynchronously; toast any that are newly earned.
+    const roundAch = detectRoundAchievements(result);
+    if (roundAch.length && authService.user && !authService.user.isAnonymous) {
+      const fresh = await authService.unlockAchievements(roundAch);
+      if (fresh.length && window.uiController) window.uiController.showAchievementToasts(fresh);
     }
 
     this.showRoundResult(result);
+  }
+
+  // Update the on-screen streak + speed-bonus HUD chips. The streak counter
+  // only surfaces once it's meaningful (x2+); the speed chip shows the bonus
+  // earned this round. Both reset/hidden between rounds via resetRoundHUD().
+  updateStreakHUD(streakMult, speedBonus, arcadeBonus) {
+    const streakDisplay = document.getElementById('streak-display');
+    const streakValue = document.getElementById('streak-value');
+    if (streakDisplay && streakValue) {
+      if (streakMult >= 2) {
+        streakValue.textContent = `x${streakMult}`;
+        streakDisplay.classList.remove('hidden');
+        streakDisplay.classList.remove('streak-pop');
+        // re-trigger the pop animation
+        void streakDisplay.offsetWidth;
+        streakDisplay.classList.add('streak-pop');
+      } else {
+        streakDisplay.classList.add('hidden');
+      }
+    }
+    const speedDisplay = document.getElementById('speed-bonus-display');
+    const speedValue = document.getElementById('speed-bonus-value');
+    if (speedDisplay && speedValue) {
+      if (arcadeBonus > 0) {
+        speedValue.textContent = `+${arcadeBonus}`;
+        speedDisplay.classList.remove('hidden');
+      } else {
+        speedDisplay.classList.add('hidden');
+      }
+    }
+  }
+
+  // Hide the streak/speed chips at the start of each round (called from
+  // loadRound). They re-appear after the next confirmGuess.
+  resetRoundHUD() {
+    document.getElementById('streak-display')?.classList.add('hidden');
+    document.getElementById('speed-bonus-display')?.classList.add('hidden');
   }
 
   showRoundResult(result) {
@@ -671,10 +752,13 @@ class GameController {
     this.game.roundResults.forEach((result) => {
       const roundItem = document.createElement('div');
       roundItem.className = 'round-item';
+      const bonus = result.arcadeBonus > 0
+        ? ` <span style="color: var(--secondary-color); font-size: 0.85rem;">(+${result.arcadeBonus}⚡)</span>`
+        : '';
       roundItem.innerHTML = `
         <span>Round ${result.round}</span>
         <span>${Math.round(result.distance)} km</span>
-        <span style="color: #4CAF50; font-weight: bold;">${result.points.toLocaleString()} pts</span>
+        <span style="color: #4CAF50; font-weight: bold;">${result.points.toLocaleString()} pts${bonus}</span>
       `;
       summaryContainer.appendChild(roundItem);
     });
@@ -706,9 +790,12 @@ class GameController {
       if (authService.user && !authService.user.isAnonymous) {
         const opponents = Object.values(players)
           .filter((p) => p.uid !== authService.user.uid && typeof p.eloStart === 'number')
-          .map((p) => ({ rating: p.eloStart, score: p.score }));
+          // ELO stays pure distance-only: compare baseScores (no arcade
+          // speed/streak bonuses). Fall back to score for older in-progress
+          // games that don't yet have a baseScore field.
+          .map((p) => ({ rating: p.eloStart, score: typeof p.baseScore === 'number' ? p.baseScore : p.score }));
         if (opponents.length > 0) {
-          const newElo = computeNewRating(myEloStart, this.game.score, opponents);
+          const newElo = computeNewRating(myEloStart, this.game.baseScore, opponents);
           myEloDelta = newElo - myEloStart;
           await authService.updateElo(newElo);
         }
@@ -730,12 +817,37 @@ class GameController {
         `;
         mpStandingsDiv.appendChild(playerScore);
       });
+
+      // Multiplayer win-streak achievement (5 wins in a row). A non-win
+      // breaks the streak. Toast if this hit the threshold.
+      if (authService.user && !authService.user.isAnonymous) {
+        const mp = await authService.recordMultiplayerResult(yourIndex === 0);
+        if (mp.unlocked && window.uiController) window.uiController.showAchievementToasts(['winStreak5']);
+      }
     }
 
     // Record the game + update aggregate stats. For multiplayer each client
     // records its own result (every player writes only their own games/users).
+    // The rounds array (per-guess coords) powers the "Your Map" heatmap.
     if (authService.user) {
-      await authService.saveGameScore(this.game.score, this.game.mode);
+      const rounds = this.game.roundResults.map((r) => ({
+        round: r.round,
+        lat: r.guessLocation.lat,
+        lng: r.guessLocation.lng,
+        distance: r.distance,
+        points: r.points,
+        mode: this.game.mode,
+      }));
+      await authService.saveGameScore(this.game.score, this.game.mode, rounds);
+
+      // Globe Trotter: unlocked once every mode has been played. Guests skip.
+      if (!authService.user.isAnonymous) {
+        const globeDone = await authService.recordModePlayed(this.game.mode);
+        if (globeDone) {
+          const fresh = await authService.unlockAchievements(['globeTrotter']);
+          if (fresh.length && window.uiController) window.uiController.showAchievementToasts(fresh);
+        }
+      }
     }
 
     this.showScreen('final-screen');

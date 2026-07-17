@@ -26,8 +26,10 @@ import {
   runTransaction,
   serverTimestamp,
   increment,
+  arrayUnion,
 } from 'firebase/firestore';
 import { DEFAULT_RATING } from '../game/elo.js';
+import { ALL_MODES } from '../game/achievements.js';
 
 class AuthService {
   constructor() {
@@ -386,22 +388,32 @@ class AuthService {
     }
   }
 
-  async saveGameScore(score, mode) {
+  // Record a finished game. Writes a `games` history doc (now enriched with a
+  // `rounds` array so the stats dashboard can plot every guess on "Your Map",
+  // and an `eloAfter` snapshot for the ELO-history chart) and updates the
+  // user's aggregate stats. The rounds array is optional so older callers
+  // still work; each entry is {lat,lng,distance,points,mode}.
+  async saveGameScore(score, mode, rounds) {
     if (!this.user) return;
     try {
       const userRef = doc(this.db, 'users', this.user.uid);
+      // Read the user doc first so we can stamp the post-game ELO onto the
+      // game doc (updateElo, if any, runs before this in showFinalScore).
+      const userDoc = await getDoc(userRef);
+      const userData = userDoc.exists() ? userDoc.data() : {};
 
-      await addDoc(collection(this.db, 'games'), {
+      const gameDoc = {
         uid: this.user.uid,
         displayName: this.user.displayName,
         score: score,
         mode: mode,
         timestamp: serverTimestamp(),
-      });
+      };
+      if (Array.isArray(rounds) && rounds.length) gameDoc.rounds = rounds;
+      if (typeof userData.elo === 'number') gameDoc.eloAfter = userData.elo;
+      await addDoc(collection(this.db, 'games'), gameDoc);
 
-      const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
-        const userData = userDoc.data();
         await updateDoc(userRef, {
           totalGames: increment(1),
           totalScore: increment(score),
@@ -411,6 +423,97 @@ class AuthService {
       }
     } catch (error) {
       console.error('Error saving score:', error);
+    }
+  }
+
+  // Unlock one or more achievements on the user's doc. Returns only the ids
+  // that were NEWLY unlocked (so the UI can toast them). No-op for guests.
+  // Rules: a user may update their own doc freely (isOwner, no field guard),
+  // so writing `achievements.{id}` needs no rules change.
+  async unlockAchievements(ids) {
+    if (!this.user || this.user.isAnonymous || !Array.isArray(ids) || ids.length === 0) return [];
+    try {
+      const ref = doc(this.db, 'users', this.user.uid);
+      const snap = await getDoc(ref);
+      const current = (snap.exists() && snap.data().achievements) || {};
+      const fresh = ids.filter((id) => !current[id]);
+      if (fresh.length === 0) return [];
+      const update = {};
+      fresh.forEach((id) => { update[`achievements.${id}`] = true; });
+      await updateDoc(ref, update);
+      return fresh;
+    } catch (error) {
+      console.error('Error unlocking achievements:', error);
+      return [];
+    }
+  }
+
+  // Record that the user played a mode. Returns true if this completed the
+  // Globe Trotter achievement (played every mode). No-op for guests.
+  async recordModePlayed(mode) {
+    if (!this.user || this.user.isAnonymous) return false;
+    try {
+      const ref = doc(this.db, 'users', this.user.uid);
+      await updateDoc(ref, { modesPlayed: arrayUnion(mode) });
+      const snap = await getDoc(ref);
+      const modes = (snap.exists() && snap.data().modesPlayed) || [];
+      return ALL_MODES.every((m) => modes.includes(m));
+    } catch (error) {
+      console.error('Error recording mode played:', error);
+      return false;
+    }
+  }
+
+  // Update the multiplayer win streak. `won` true => increment, false => reset
+  // to 0 (any non-win breaks the streak). Unlocks winStreak5 at 5+. Returns
+  // { winStreak, unlocked }. No-op for guests (ranked/MP features are gated).
+  async recordMultiplayerResult(won) {
+    if (!this.user || this.user.isAnonymous) return { winStreak: 0, unlocked: false };
+    try {
+      const ref = doc(this.db, 'users', this.user.uid);
+      const snap = await getDoc(ref);
+      const cur = (snap.exists() && snap.data().winStreak) || 0;
+      const next = won ? cur + 1 : 0;
+      await updateDoc(ref, { winStreak: next });
+      const unlocked = next >= 5;
+      if (unlocked) await this.unlockAchievements(['winStreak5']);
+      return { winStreak: next, unlocked };
+    } catch (error) {
+      console.error('Error recording multiplayer result:', error);
+      return { winStreak: 0, unlocked: false };
+    }
+  }
+
+  // Fetch the user's own profile doc (achievements, stats, modesPlayed,
+  // winStreak, elo) for the Profile/Stats screen.
+  async getMyProfile() {
+    if (!this.user) return null;
+    try {
+      const snap = await getDoc(doc(this.db, 'users', this.user.uid));
+      return snap.exists() ? snap.data() : null;
+    } catch (error) {
+      console.error('Error getting profile:', error);
+      return null;
+    }
+  }
+
+  // Fetch the current user's game history (newest first) — the per-round
+  // `rounds` array on each doc powers the "Your Map" heatmap. Scoped to the
+  // signed-in user (the global getRecentGames is leaderboard-oriented).
+  async getMyGames(limitCount = 50) {
+    if (!this.user) return [];
+    try {
+      const q = query(
+        collection(this.db, 'games'),
+        where('uid', '==', this.user.uid),
+        orderBy('timestamp', 'desc'),
+        limit(limitCount),
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => d.data());
+    } catch (error) {
+      console.error('Error getting my games:', error);
+      return [];
     }
   }
 

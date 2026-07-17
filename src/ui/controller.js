@@ -6,6 +6,9 @@ import { authService } from '../services/auth.js';
 import { multiplayerService } from '../services/multiplayer.js';
 import { friendsService } from '../services/friends.js';
 import { getModeMeta } from '../game/locations.js';
+import { arcadeFX } from '../game/arcade.js';
+import { ACHIEVEMENTS, ALL_MODES, availablePins, pinEmoji } from '../game/achievements.js';
+import { ARCADE_MAP_STYLE } from '../game/mapStyle.js';
 
 class UIController {
   constructor(auth, multiplayer, friends) {
@@ -98,6 +101,13 @@ class UIController {
     // Leaderboard
     document.getElementById('leaderboard-btn').addEventListener('click', () => this.showLeaderboard());
     document.getElementById('close-leaderboard-btn').addEventListener('click', () => this.closeLeaderboard());
+
+    // Profile / Stats dashboard
+    document.getElementById('profile-btn')?.addEventListener('click', () => this.showProfile());
+    document.getElementById('close-profile-btn')?.addEventListener('click', () => this.showScreen('main-menu'));
+
+    // Sound toggle (arcade FX mute). Persisted in localStorage.
+    this.initSoundToggle();
 
     // Friends
     document.getElementById('close-friends-btn')?.addEventListener('click', () => this.showScreen('main-menu'));
@@ -557,6 +567,305 @@ class UIController {
 
   closeLeaderboard() {
     this.showScreen('main-menu');
+  }
+
+  // ===== Profile / Stats dashboard =====
+
+  async showProfile() {
+    this.showScreen('profile-screen');
+    const content = document.getElementById('profile-content');
+    if (content) content.innerHTML = '<div class="profile-empty">Loading your stats…</div>';
+    await this.renderProfile();
+  }
+
+  async renderProfile() {
+    const content = document.getElementById('profile-content');
+    if (!content) return;
+
+    // Guests don't persist profile/achievements — show a friendly gate.
+    if (!this.auth.user || this.auth.user.isAnonymous) {
+      content.innerHTML = `
+        <div class="profile-guest">
+          <p>🔒 Sign up with an email account to earn achievements, build a rating, and track your stats on a personal profile.</p>
+        </div>`;
+      return;
+    }
+
+    const [profile, games] = await Promise.all([
+      this.auth.getMyProfile(),
+      this.auth.getMyGames(50),
+    ]);
+
+    if (!profile) {
+      content.innerHTML = '<div class="profile-empty">No profile data yet — play a game!</div>';
+      return;
+    }
+
+    const achievements = profile.achievements || {};
+    const totalGames = profile.totalGames || 0;
+    const bestScore = profile.bestScore || 0;
+    const elo = profile.elo || 1000;
+    const winStreak = profile.winStreak || 0;
+
+    // Flatten per-round guesses across game history for the map + accuracy.
+    const allRounds = [];
+    (games || []).forEach((g) => {
+      (g.rounds || []).forEach((r) => allRounds.push({ ...r, mode: r.mode || g.mode }));
+    });
+
+    // Accuracy by mode: average distance + count.
+    const byMode = {};
+    ALL_MODES.forEach((m) => { byMode[m] = { count: 0, distSum: 0 }; });
+    allRounds.forEach((r) => {
+      if (byMode[r.mode] && typeof r.distance === 'number') {
+        byMode[r.mode].count++;
+        byMode[r.mode].distSum += r.distance;
+      }
+    });
+
+    // Best rounds (top 5 by points).
+    const bestRounds = [...allRounds]
+      .filter((r) => typeof r.points === 'number')
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 5);
+
+    // ELO history: games with an eloAfter snapshot, oldest-first.
+    const eloHistory = (games || [])
+      .filter((g) => typeof g.eloAfter === 'number' && g.timestamp)
+      .sort((a, b) => a.timestamp.seconds - b.timestamp.seconds)
+      .map((g) => g.eloAfter);
+
+    content.innerHTML = `
+      <div class="profile-header">
+        <div class="profile-avatar">${(profile.displayName || 'G').charAt(0).toUpperCase()}</div>
+        <div class="profile-header-info">
+          <div class="profile-name">${profile.displayName || 'Player'}</div>
+          <div class="profile-stats-row">
+            <span class="profile-stat"><strong>${elo}</strong>⚡ ELO</span>
+            <span class="profile-stat"><strong>${totalGames}</strong> games</span>
+            <span class="profile-stat"><strong>${bestScore.toLocaleString()}</strong> best</span>
+            <span class="profile-stat"><strong>${winStreak}</strong>🔥 win streak</span>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="profile-section-title">🏆 Achievements</h3>
+      <div class="achievement-grid">
+        ${Object.values(ACHIEVEMENTS).map((a) => {
+          const unlocked = !!achievements[a.id];
+          return `
+            <div class="achievement-card ${unlocked ? 'unlocked' : 'locked'}" title="${a.desc}">
+              <span class="achievement-emoji ${unlocked ? '' : 'dim'}">${a.emoji}</span>
+              <span class="achievement-label">${a.label}</span>
+              <span class="achievement-desc">${a.desc}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <h3 class="profile-section-title">🏳️ Guess Pin</h3>
+      <div class="pin-selector" id="pin-selector">
+        ${availablePins(Object.keys(achievements)).map((p) => {
+          const selected = (localStorage.getItem('geoguesser_selected_pin') || 'default') === p.id;
+          return `
+            <button class="pin-option ${selected ? 'selected' : ''}" data-pin="${p.id}" title="${p.label}">
+              <span class="pin-option-emoji">${p.emoji}</span>
+              <span class="pin-option-label">${p.label}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+      <div class="profile-hint">Unlock more pins by earning achievements. Locked pins aren't shown.</div>
+
+      <h3 class="profile-section-title">🗺️ Your Map</h3>
+      <div id="profile-map" class="profile-map"></div>
+      ${allRounds.length === 0 ? '<div class="profile-empty">Play some rounds to see your guesses plotted here.</div>' : ''}
+
+      <h3 class="profile-section-title">📊 Accuracy by Mode</h3>
+      <div class="profile-accuracy">
+        ${ALL_MODES.map((m) => {
+          const meta = getModeMeta(m);
+          const s = byMode[m];
+          if (!s || s.count === 0) {
+            return `<div class="accuracy-row"><span class="accuracy-mode">${meta.emoji} ${meta.label}</span><span class="accuracy-val muted">not played</span></div>`;
+          }
+          const avg = s.distSum / s.count;
+          return `<div class="accuracy-row">
+            <span class="accuracy-mode">${meta.emoji} ${meta.label}</span>
+            <span class="accuracy-bar"><span class="accuracy-bar-fill" style="width:${Math.max(4, Math.min(100, 100 - Math.min(avg, 2000) / 20))}%"></span></span>
+            <span class="accuracy-val">${avg < 1 ? Math.round(avg * 1000) + ' m' : Math.round(avg) + ' km'} · ${s.count}r</span>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <h3 class="profile-section-title">⭐ Best Rounds</h3>
+      <div class="profile-best">
+        ${bestRounds.length === 0
+          ? '<div class="profile-empty">No rounds recorded yet.</div>'
+          : bestRounds.map((r) => {
+              const meta = getModeMeta(r.mode);
+              return `<div class="best-round">
+                <span class="best-pts">${r.points.toLocaleString()} pts</span>
+                <span class="best-meta">${meta.emoji} ${meta.label} · ${r.distance < 1 ? Math.round(r.distance * 1000) + ' m' : Math.round(r.distance) + ' km'}</span>
+              </div>`;
+            }).join('')}
+      </div>
+
+      <h3 class="profile-section-title">📈 ELO History</h3>
+      <canvas id="elo-chart" class="profile-chart" width="600" height="160"></canvas>
+      ${eloHistory.length === 0 ? '<div class="profile-empty">Play ranked multiplayer games to build an ELO history.</div>' : ''}
+    `;
+
+    this.renderProfileMap(allRounds);
+    this.renderEloChart(eloHistory);
+
+    // Pin selector: clicking a pin stores the choice (localStorage) and
+    // re-styles the selected option. A coin blip confirms the change.
+    document.querySelectorAll('#pin-selector .pin-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pinId = btn.getAttribute('data-pin');
+        localStorage.setItem('geoguesser_selected_pin', pinId);
+        document.querySelectorAll('#pin-selector .pin-option').forEach((b) => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        arcadeFX.playCoin();
+      });
+    });
+  }
+
+  // "Your Map": plot every guess as a colored pin (pink = great, blue = ok,
+  // gray = far) on an arcade-themed map. Capped to the 250 most recent guesses
+  // so a long history doesn't overload the Maps API.
+  renderProfileMap(rounds) {
+    const el = document.getElementById('profile-map');
+    if (!el || typeof google === 'undefined' || !google.maps) return;
+    const recent = rounds.slice(-250);
+    if (recent.length === 0) {
+      el.classList.add('hidden');
+      return;
+    }
+    el.classList.remove('hidden');
+    const map = new google.maps.Map(el, {
+      center: { lat: 20, lng: 0 },
+      zoom: 2,
+      streetViewControl: false,
+      mapTypeControl: false,
+      fullscreenControl: true,
+      styles: ARCADE_MAP_STYLE,
+    });
+    const bounds = new google.maps.LatLngBounds();
+    recent.forEach((r) => {
+      if (typeof r.lat !== 'number' || typeof r.lng !== 'number') return;
+      const pos = { lat: r.lat, lng: r.lng };
+      const color = r.distance < 1 ? '#ff3b6b'
+        : r.distance < 50 ? '#ffd23f'
+        : r.distance < 500 ? '#2d7dff'
+        : '#6b5fa0';
+      new google.maps.Circle({
+        map,
+        center: pos,
+        radius: Math.max(4000, Math.min(30000, r.distance * 200)),
+        fillColor: color,
+        fillOpacity: 0.7,
+        strokeColor: '#fff',
+        strokeWeight: 1,
+        clickable: false,
+      });
+      bounds.extend(pos);
+    });
+    if (!bounds.isEmpty()) map.fitBounds(bounds, 20);
+  }
+
+  // ELO history line chart drawn on a 2D canvas (no charting dependency).
+  renderEloChart(history) {
+    const canvas = document.getElementById('elo-chart');
+    if (!canvas || history.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const min = Math.min(...history, 800);
+    const max = Math.max(...history, 1200);
+    const span = Math.max(50, max - min);
+    const pad = 14;
+    const x = (i) => history.length === 1 ? W / 2 : pad + (i / (history.length - 1)) * (W - 2 * pad);
+    const y = (v) => H - pad - ((v - min) / span) * (H - 2 * pad);
+
+    // grid baseline
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, y(1000));
+    ctx.lineTo(W - pad, y(1000));
+    ctx.stroke();
+
+    // line
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    history.forEach((v, i) => { i === 0 ? ctx.moveTo(x(i), y(v)) : ctx.lineTo(x(i), y(v)); });
+    ctx.stroke();
+
+    // points
+    ctx.fillStyle = '#ff3b6b';
+    history.forEach((v, i) => {
+      ctx.beginPath();
+      ctx.arc(x(i), y(v), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // start/end labels
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(String(history[0]), pad, H - 4);
+    ctx.fillText(String(history[history.length - 1]), W - pad - 30, H - 4);
+  }
+
+  // Sound toggle: reflects + persists the arcade-FX mute state. The button
+  // label swaps between 🔊 / 🔇.
+  initSoundToggle() {
+    const btn = document.getElementById('sound-toggle-btn');
+    if (!btn) return;
+    const stored = localStorage.getItem('geoguesser_muted') === '1';
+    arcadeFX.setMuted(stored);
+    btn.textContent = stored ? '🔇' : '🔊';
+    btn.addEventListener('click', () => this.toggleSound());
+  }
+
+  toggleSound() {
+    const btn = document.getElementById('sound-toggle-btn');
+    const muted = !arcadeFX.isMuted();
+    arcadeFX.setMuted(muted);
+    localStorage.setItem('geoguesser_muted', muted ? '1' : '0');
+    if (btn) btn.textContent = muted ? '🔇' : '🔊';
+    // Play a coin so the user hears the new (un-muted) state immediately.
+    if (!muted) arcadeFX.playCoin();
+  }
+
+  // Pop a toast for each newly-unlocked achievement id. Stacks vertically,
+  // auto-dismisses after 4s. Safe to call mid-game (overlay is global).
+  showAchievementToasts(ids) {
+    const container = document.getElementById('achievement-toast-container');
+    if (!container || !Array.isArray(ids)) return;
+    ids.forEach((id, i) => {
+      const meta = ACHIEVEMENTS[id];
+      if (!meta) return;
+      const toast = document.createElement('div');
+      toast.className = 'achievement-toast';
+      toast.innerHTML = `
+        <span class="achievement-toast-emoji">${meta.emoji}</span>
+        <span class="achievement-toast-text">
+          <span class="achievement-toast-title">Achievement Unlocked!</span>
+          <span class="achievement-toast-name">${meta.label}</span>
+          <span class="achievement-toast-desc">${meta.desc}</span>
+        </span>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('leaving');
+        setTimeout(() => toast.remove(), 400);
+      }, 4000 + i * 600);
+    });
   }
 
   backToMenu() {

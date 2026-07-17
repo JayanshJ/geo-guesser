@@ -266,3 +266,31 @@ export function getModeMeta(mode) {
 export function computeScore(distanceKm, decayFactor) {
   return Math.round(5000 * Math.exp(-distanceKm / decayFactor));
 }
+
+// Speed bonus: extra ARCADE points for fast guesses, decaying linearly from
+// MAX_SPEED_BONUS (instant guess) to 0 (time ran out). No bonus under
+// unlimited time (no speed pressure) or when the timer was never started.
+// This is arcade-only — it never feeds into ranked ELO (see GameController:
+// ELO is computed from the distance-only baseScore). Pure & unit-tested.
+export const MAX_SPEED_BONUS = 500;
+export function computeSpeedBonus(timeUsedSec, timeLimitSec) {
+  if (!timeLimitSec || timeLimitSec === 'unlimited') return 0;
+  const limit = Number(timeLimitSec);
+  if (!Number.isFinite(limit) || limit <= 0) return 0;
+  if (timeUsedSec == null || !Number.isFinite(Number(timeUsedSec))) return 0;
+  const used = Math.max(0, Math.min(Number(timeUsedSec), limit));
+  const fraction = 1 - used / limit; // 1 at instant guess, 0 at time-up
+  const raw = MAX_SPEED_BONUS * fraction;
+  return Math.round(raw / 10) * 10; // snap to nearest 10 for arcade feel
+}
+
+// Streak multiplier: consecutive sub-500m guesses build a combo. x1 at 0–1
+// good guesses, then +1 per consecutive good guess, capped at x5. The
+// multiplier amplifies the (arcade-only) speed bonus and is shown on-screen
+// as the x2/x3 arcade counter. Pure & unit-tested.
+export const STREAK_THRESHOLD_KM = 0.5;
+export const MAX_STREAK_MULTIPLIER = 5;
+export function computeStreakMultiplier(consecutiveSub500mCount) {
+  const n = Math.max(0, Math.floor(Number(consecutiveSub500mCount) || 0));
+  return Math.max(1, Math.min(n, MAX_STREAK_MULTIPLIER));
+}

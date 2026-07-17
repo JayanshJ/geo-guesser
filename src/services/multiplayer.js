@@ -156,10 +156,10 @@ class MultiplayerService {
     });
   }
 
-  async submitGuess(round, location, distance, points) {
+  async submitGuess(round, location, distance, points, basePoints) {
     if (!this.currentGame || !this.authService.user) return;
     const uid = this.authService.user.uid;
-    await updateDoc(this.currentGame.ref, {
+    const update = {
       [`players.${uid}.guesses.${round}`]: {
         location: location,
         distance: distance,
@@ -167,7 +167,13 @@ class MultiplayerService {
         timestamp: serverTimestamp(),
       },
       [`players.${uid}.score`]: increment(points),
-    });
+    };
+    // baseScore is the distance-only total used for ranked ELO (kept pure,
+    // separate from the arcade score that includes speed/streak bonuses).
+    if (typeof basePoints === 'number') {
+      update[`players.${uid}.baseScore`] = increment(basePoints);
+    }
+    await updateDoc(this.currentGame.ref, update);
   }
 
   async saveResolvedLocation(roundIndex, resolvedLocation) {
