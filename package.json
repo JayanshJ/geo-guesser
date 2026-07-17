@@ -1,0 +1,27 @@
+{
+  "name": "geo-guesser",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multiplayer GeoGuesser built with vanilla JS, Firebase, and Google Maps.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "firebase": "^10.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.5.0",
+    "eslint": "^9.5.0",
+    "globals": "^15.6.0",
+    "prettier": "^3.3.2",
+    "vite": "^5.3.3",
+    "vitest": "^2.0.0"
+  }
+}

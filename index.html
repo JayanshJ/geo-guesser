@@ -7,6 +7,54 @@
     <link rel="stylesheet" href="styles-production.css">
     <link rel="stylesheet" href="friends-styles.css">
     <link rel="stylesheet" href="auth-styles.css">
+    <style>
+      /* Compass overlay (Street View QoL) */
+      .compass {
+        position: absolute;
+        top: 70px;
+        right: 16px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.9);
+        border: 2px solid #333;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+        pointer-events: none;
+      }
+      .compass-dial { width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; }
+      .compass-needle {
+        font-weight: bold;
+        color: #d32f2f;
+        font-size: 14px;
+        transform-origin: center;
+        transition: transform 0.05s linear;
+      }
+      #return-start-btn { margin-right: 6px; }
+
+      /* Leaderboard score/rating toggle */
+      .leaderboard-toggle { text-align: center; margin-bottom: 8px; }
+      .nmpz-label { display: flex; justify-content: center; margin-top: 12px; font-size: 0.9em; }
+
+      /* In-game chat */
+      .chat-toggle { position: absolute; bottom: 16px; right: 16px; z-index: 6; }
+      .chat-panel {
+        position: absolute; bottom: 60px; right: 16px; width: 260px; max-height: 240px;
+        background: rgba(20,20,30,0.92); color: #fff; border-radius: 8px;
+        display: flex; flex-direction: column; z-index: 6; overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      }
+      .chat-messages { flex: 1; overflow-y: auto; padding: 8px; font-size: 0.85em; }
+      .chat-messages .chat-msg { margin-bottom: 6px; line-height: 1.3; }
+      .chat-messages .chat-name { font-weight: bold; color: #8ad; }
+      .chat-messages .chat-self .chat-name { color: #6d6; }
+      .chat-input-row { display: flex; border-top: 1px solid #444; }
+      .chat-input { flex: 1; background: #111; color: #fff; border: none; padding: 6px 8px; font-size: 0.85em; }
+      .chat-input:focus { outline: none; }
+    </style>
 </head>
 <body>
     <!-- Welcome Screen -->
@@ -111,6 +159,10 @@
                 </button>
             </div>
             <button id="cancel-time-select-btn" class="btn btn-small">Cancel</button>
+            <label class="checkbox-label nmpz-label">
+                <input type="checkbox" id="nmpz-checkbox">
+                <span> Hardcore (NMPZ): no moving, panning, or zooming</span>
+            </label>
         </div>
     </div>
 
@@ -141,20 +193,40 @@
                 <div class="mode-selection">
                     <button id="solo-world-btn" class="btn btn-primary">🌍 World Mode</button>
                     <button id="solo-india-btn" class="btn btn-india">🇮🇳 India Mode</button>
+                    <button id="solo-europe-btn" class="btn btn-secondary">🇪🇺 Europe Mode</button>
+                    <button id="solo-us-btn" class="btn btn-secondary">🇺🇸 US Mode</button>
+                    <button id="solo-asia-btn" class="btn btn-secondary">🌏 Asia Mode</button>
+                    <button id="solo-landmarks-btn" class="btn btn-secondary">🏛️ Landmarks Mode</button>
                 </div>
             </div>
-            
+
             <div class="menu-section">
                 <h2>Play with Friend</h2>
                 <div class="friend-play-section">
                     <div class="mode-selection">
                         <button id="create-world-btn" class="btn btn-multiplayer">🌍 Create World Game</button>
                         <button id="create-india-btn" class="btn btn-multiplayer">🇮🇳 Create India Game</button>
+                        <button id="create-europe-btn" class="btn btn-multiplayer">🇪🇺 Create Europe Game</button>
+                        <button id="create-us-btn" class="btn btn-multiplayer">🇺🇸 Create US Game</button>
+                        <button id="create-asia-btn" class="btn btn-multiplayer">🌏 Create Asia Game</button>
+                        <button id="create-landmarks-btn" class="btn btn-multiplayer">🏛️ Create Landmarks Game</button>
                     </div>
                     <div class="join-section">
                         <input type="text" id="room-code-input" class="room-code-input" placeholder="Enter Room Code" maxlength="6">
                         <button id="join-room-btn" class="btn btn-primary">Join</button>
                     </div>
+                </div>
+            </div>
+
+            <div class="menu-section">
+                <h2>Ranked</h2>
+                <div class="mode-selection">
+                    <button id="ranked-world-btn" class="btn btn-multiplayer">⚡ Find World Match</button>
+                    <button id="ranked-india-btn" class="btn btn-multiplayer">⚡ Find India Match</button>
+                    <button id="ranked-europe-btn" class="btn btn-multiplayer">⚡ Find Europe Match</button>
+                    <button id="ranked-us-btn" class="btn btn-multiplayer">⚡ Find US Match</button>
+                    <button id="ranked-asia-btn" class="btn btn-multiplayer">⚡ Find Asia Match</button>
+                    <button id="ranked-landmarks-btn" class="btn btn-multiplayer">⚡ Find Landmarks Match</button>
                 </div>
             </div>
             
@@ -269,10 +341,16 @@
             <div id="multiplayer-scores" class="hidden">
                 <!-- Scores will be dynamically added here for all players -->
             </div>
+            <button id="return-start-btn" class="btn btn-small hidden">📍 Return to Start</button>
             <button id="quit-btn" class="btn btn-small">Quit</button>
         </div>
 
         <div id="street-view"></div>
+        <div id="compass" class="compass hidden" title="North">
+            <div class="compass-dial">
+                <div class="compass-needle" id="compass-needle">N</div>
+            </div>
+        </div>
 
         <div id="map-container" class="minimized">
             <button id="toggle-map-btn" class="btn btn-small">Show Map</button>
@@ -282,6 +360,16 @@
                     <button id="confirm-guess-btn" class="btn btn-primary" disabled>Confirm</button>
                     <button id="minimize-map-btn" class="btn btn-small">Minimize</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- In-game chat (multiplayer) -->
+        <button id="chat-toggle-btn" class="btn btn-small chat-toggle hidden">💬 Chat</button>
+        <div id="chat-panel" class="chat-panel hidden">
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" class="chat-input" placeholder="Message..." maxlength="280">
+                <button id="chat-send-btn" class="btn btn-small">Send</button>
             </div>
         </div>
     </div>
@@ -328,7 +416,11 @@
                 </div>
             </div>
             <div class="round-summary" id="round-summary"></div>
+            <canvas id="share-canvas" class="hidden" width="600" height="380"></canvas>
             <div class="button-group">
+                <button id="rematch-btn" class="btn btn-secondary hidden">🔄 Rematch</button>
+                <button id="join-rematch-btn" class="btn btn-primary hidden">Join Rematch</button>
+                <button id="share-result-btn" class="btn btn-secondary">📸 Share Result</button>
                 <button id="play-again-btn" class="btn btn-primary">Back to Menu</button>
             </div>
         </div>
@@ -343,32 +435,9 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    
-    <!-- Configuration -->
-    <script src="config.js"></script>
-    
-    <!-- Services -->
-    <script src="services.js"></script>
-    
-    <!-- Game Logic -->
-    <script src="game.js"></script>
-    
-    <!-- UI Controllers -->
-    <script src="ui-controller.js"></script>
-    
-    <!-- Google Maps -->
-    <script>
-        (function() {
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${CONFIG.GOOGLE_MAPS_API_KEY}&callback=initApp&libraries=geometry`;
-            script.async = true;
-            script.defer = true;
-            document.body.appendChild(script);
-        })();
-    </script>
+    <!-- App entry (ES module). Initializes Firebase (modular SDK), services,
+         game + UI controllers, then injects the Google Maps script which calls
+         the global `initApp` once loaded. -->
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>

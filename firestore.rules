@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- users/{uid} ----
+    // Any signed-in user can read (leaderboard + friend search depend on this;
+    // note: this exposes profile fields including email to other signed-in
+    // users — a known limitation). A user creates/updates their own doc freely.
+    // Other users may only append to `friendRequests` / `friends` (the friend
+    // request + mutual-accept flows write to the other party's doc).
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid)
+        || (isSignedIn()
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['friendRequests', 'friends']));
+      allow delete: if isOwner(uid);
+    }
+
+    // ---- usernames/{lowercase} ----
+    // Uniqueness anchor. `update` is denied, so once a username doc exists it
+    // cannot be taken by anyone else (a second claim is an update on the
+    // existing doc → denied). Only the owning user may delete (e.g. account
+    // deletion).
+    match /usernames/{name} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---- games/{id} ----
+    // Solo game history. Anyone signed in can read; a user may only create a
+    // game record for themselves. No edits.
+    match /games/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---- game_invites/{id} ----
+    // Only the sender or recipient can read/modify an invite.
+    match /game_invites/{id} {
+      allow read: if isSignedIn()
+        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.from == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow delete: if isSignedIn()
+        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+    }
+
+    // ---- multiplayer_games/{roomCode} ----
+    // Anyone signed in can read (to join / observe via the onSnapshot listener).
+    // The host creates the doc and may update anything (status, round,
+    // resolvedLocations, etc.). A non-host may only modify the `players` map
+    // (add themselves on join, submit their own guess/score, mark themselves
+    // left) and must leave all game-control fields unchanged — OR abandon the
+    // game by setting status='abandoned' with themselves as abandonedBy.
+    match /multiplayer_games/{roomCode} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.host.uid == request.auth.uid
+        && request.resource.data.players[request.auth.uid].uid == request.auth.uid;
+
+      allow update: if isSignedIn() && (
+        resource.data.host.uid == request.auth.uid
+        || (
+          // Non-host: only the players map may change; control fields frozen.
+          request.resource.data.host == resource.data.host
+          && request.resource.data.mode == resource.data.mode
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.nmpz == resource.data.nmpz
+          && request.resource.data.timeControl == resource.data.timeControl
+          && request.resource.data.maxPlayers == resource.data.maxPlayers
+          && request.resource.data.totalRounds == resource.data.totalRounds
+          && request.resource.data.currentRound == resource.data.currentRound
+          && request.resource.data.locations == resource.data.locations
+          && request.resource.data.resolvedLocations == resource.data.resolvedLocations
+          && request.resource.data.roomCode == resource.data.roomCode
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.players[request.auth.uid] != null
+        )
+        || (
+          // Any player may abandon (set status=abandoned, themselves as the one
+          // who left). Limited to those three fields.
+          request.resource.data.status == 'abandoned'
+          && request.resource.data.abandonedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'abandonedBy', 'abandonedAt'])
+        )
+      );
+
+      allow delete: if isSignedIn() && resource.data.host.uid == request.auth.uid;
+    }
+
+    // ---- multiplayer_games/{roomCode}/messages/{id} ----
+    // In-game chat. Anyone signed in can read; a user may only create a
+    // message authored by themselves. No edits/deletes.
+    match /multiplayer_games/{roomCode}/messages/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---- matchmaking/{uid} ----
+    // Ranked queue. A user creates/reads/deletes only their own entry. The
+    // claim transaction writes the OPPONENT's doc (searching -> matched), so a
+    // non-owner update is allowed but tightly scoped: it may only flip a
+    // `searching` doc to `matched`, changing exactly status/roomCode/matchedAt
+    // and leaving uid + everything else intact.
+    match /matchmaking/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid);
+      allow update: if isSignedIn() && (
+        isOwner(uid)
+        || (resource.data.status == 'searching'
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.status == 'matched'
+            && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['status', 'roomCode', 'matchedAt']))
+      );
+      allow delete: if isOwner(uid);
+    }
+  }
+}
