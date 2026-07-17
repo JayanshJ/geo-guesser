@@ -212,7 +212,9 @@ class UIController {
   }
 
   startSoloGame(mode, timeControl = 'unlimited', nmpz = false) {
-    window.gameController.startGame(mode, false, timeControl, { restrictMovement: nmpz });
+    this.ensureMapsReady(() => {
+      window.gameController.startGame(mode, false, timeControl, { restrictMovement: nmpz });
+    });
   }
 
   async createMultiplayerGame(mode, timeControl = 'unlimited', nmpz = false) {
@@ -352,9 +354,54 @@ class UIController {
       this.startChat();
       setTimeout(() => {
         const timeControl = gameData.timeControl || 'unlimited';
-        window.gameController.startGame(gameData.mode, true, timeControl);
+        this.ensureMapsReady(() => {
+          window.gameController.startGame(gameData.mode, true, timeControl);
+        });
       }, 2000);
     }
+  }
+
+  // Wait for Google Maps to be ready before starting a game (Street View + map
+  // need it). Maps loads independently of auth; if the user clicks Play before
+  // it's ready, show a brief "Loading map…" state and start the moment it lands.
+  // Aborts if the maps-error banner is already up (bad key) — don't hang forever.
+  ensureMapsReady(cb) {
+    if (window.googleMapsReady) { cb(); return; }
+    if (document.getElementById('maps-error-banner')) {
+      alert('Google Maps failed to load. Check your API key in .env.local, then reload.');
+      return;
+    }
+    let overlay = document.getElementById('maps-loading-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'maps-loading-overlay';
+      overlay.className = 'maps-loading-overlay';
+      overlay.innerHTML = '<div class="maps-loading-card"><div class="spinner"></div><p>Loading map…</p></div>';
+      document.body.appendChild(overlay);
+    }
+    overlay.classList.remove('hidden');
+    let waited = 0;
+    const tick = () => {
+      if (window.googleMapsReady) {
+        overlay.classList.add('hidden');
+        cb();
+        return;
+      }
+      if (document.getElementById('maps-error-banner')) {
+        overlay.classList.add('hidden');
+        alert('Google Maps failed to load. Check your API key in .env.local, then reload.');
+        return;
+      }
+      waited += 150;
+      if (waited > 15000) {
+        overlay.classList.add('hidden');
+        alert('Google Maps is taking too long to load. Check your connection and API key, then reload.');
+        return;
+      }
+      setTimeout(tick, 150);
+    };
+    window._flushPendingGameStart = () => { /* onMapsReady already set the flag */ };
+    setTimeout(tick, 150);
   }
 
   // ---- In-game chat ----

@@ -8,7 +8,7 @@
 .auth-form {
     max-width: 400px;
     margin: 0 auto;
-    padding: 30px;
+    padding: var(--space-3, 12px) 0;
     animation: fadeInMsg 0.3s ease-in;
 }
 
@@ -26,7 +26,7 @@
     display: flex;
     justify-content: flex-end;
     margin-bottom: 15px;
-    margin-top: -10px;
+    margin-top: var(--space-2, 8px);
 }
 
 .forgot-password-link {
@@ -53,7 +53,7 @@
 
 /* Password strength indicator */
 .password-strength {
-    margin-top: -10px;
+    margin-top: var(--space-2, 8px);
     margin-bottom: 15px;
     padding: 8px 12px;
     border-radius: var(--border-radius-sm, 10px);
@@ -61,6 +61,12 @@
     font-weight: 600;
     text-align: center;
     transition: all 0.3s;
+}
+/* Empty (no verdict yet) shouldn't render a visible bordered box. */
+.password-strength:empty {
+    padding: 0;
+    margin: 0;
+    border: none;
 }
 
 .password-strength.weak {
@@ -101,14 +107,9 @@
 
 .checkbox-label:hover { color: var(--text-primary, #fff); }
 
-/* Button loading state — layout only; visual base lives in production CSS */
-.btn {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
+/* Button loading state — only the text/spinner swap; do NOT redeclare .btn
+   display here (a previous `display:inline-flex` leaked app-wide and changed
+   button widths in every screen). The base .btn layout is owned by production. */
 .btn-text { display: inline-block; }
 
 .btn-spinner {
@@ -195,19 +196,18 @@
     color: var(--dark-bg, #1a1033);
 }
 
-/* Input validation feedback */
+/* Input validation feedback. No !important — let the production focus ring
+   (box-shadow + accent border) still apply while focused. */
 .auth-input.valid {
-    border-color: var(--success, #2d7dff) !important;
+    border-color: var(--success, #2d7dff);
 }
 
 .auth-input.invalid {
-    border-color: var(--error, #ff3b6b) !important;
+    border-color: var(--error, #ff3b6b);
 }
 
 /* Responsive adjustments */
 @media (max-width: 480px) {
-    .auth-form { padding: 20px 15px; }
-
     .verification-banner {
         flex-direction: column;
         align-items: flex-start;

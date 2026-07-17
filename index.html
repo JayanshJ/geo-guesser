@@ -13,10 +13,12 @@
     <link rel="stylesheet" href="friends-styles.css">
     <link rel="stylesheet" href="auth-styles.css">
     <style>
-      /* Compass overlay (Street View QoL) — arcade themed */
+      /* Compass overlay (Street View QoL) — arcade themed. Sits below the
+         header band (top:84px) and above Street View; z-overlay keeps it
+         above an expanded map if one ever rises this high. */
       .compass {
         position: absolute;
-        top: 70px;
+        top: 84px;
         right: 16px;
         width: 48px;
         height: 48px;
@@ -27,7 +29,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 5;
+        z-index: var(--z-overlay, 200);
         pointer-events: none;
       }
       .compass-dial { width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; }
@@ -44,14 +46,15 @@
       .leaderboard-toggle { text-align: center; margin-bottom: 8px; }
       .nmpz-label { display: flex; justify-content: center; margin-top: 12px; font-size: 0.9em; }
 
-      /* In-game chat — arcade themed */
-      .chat-toggle { position: absolute; bottom: 16px; right: 16px; z-index: 6; }
+      /* In-game chat — arcade themed. Anchored bottom-LEFT so it never sits
+         under the bottom-right guess map. z-overlay keeps it above the map. */
+      .chat-toggle { position: absolute; bottom: 16px; left: 16px; z-index: var(--z-overlay, 200); }
       .chat-panel {
-        position: absolute; bottom: 60px; right: 16px; width: 260px; max-height: 240px;
+        position: absolute; bottom: 60px; left: 16px; width: min(280px, 80vw); max-height: 260px;
         background: #241a47; color: #fff; border-radius: 12px;
         border: 3px solid #2d7dff;
         box-shadow: 4px 4px 0 rgba(0,0,0,0.45), 0 0 18px rgba(45, 125, 255, 0.3);
-        display: flex; flex-direction: column; z-index: 6; overflow: hidden;
+        display: flex; flex-direction: column; z-index: var(--z-overlay, 200); overflow: hidden;
       }
       .chat-messages { flex: 1; overflow-y: auto; padding: 8px; font-size: 0.85em; }
       .chat-messages .chat-msg { margin-bottom: 6px; line-height: 1.3; }

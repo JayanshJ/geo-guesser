@@ -6,14 +6,13 @@
 /* Friends Screen Container */
 .friends-container {
     max-width: 720px;
-    width: 92%;
+    width: 100%;
     background: var(--dark-surface, #241a47);
-    padding: 45px 40px;
+    padding: 40px 34px;
+    margin: var(--space-5, 20px) auto;
     border-radius: var(--border-radius-xl, 24px);
     box-shadow: var(--shadow-xl, 8px 8px 0 rgba(0,0,0,0.55)), var(--glow-secondary, 0 0 24px rgba(45,125,255,0.45));
     border: 4px solid var(--secondary-color, #2d7dff);
-    max-height: 85vh;
-    overflow-y: auto;
     position: relative;
 }
 
@@ -78,10 +77,11 @@
 
 .friends-section:hover::before { left: 150%; }
 
+/* No translateY on hover: the section contains the friends list, and lifting
+   the whole section on hover caused the list to jump under the cursor. */
 .friends-section:hover {
     background: var(--dark-surface, #241a47);
     border-color: var(--primary-color, #ff3b6b);
-    transform: translateY(-3px);
     box-shadow: var(--shadow-md, 4px 4px 0 rgba(0,0,0,0.45));
 }
 
@@ -305,10 +305,8 @@
     gap: 6px;
 }
 
-/* Friends List */
+/* Friends List — no fixed pixel cap; the screen scrolls as one. */
 .friends-list {
-    max-height: 400px;
-    overflow-y: auto;
     padding-right: 5px;
 }
 
@@ -390,7 +388,6 @@
 @media (max-width: 768px) {
     .friends-container {
         padding: 30px 20px;
-        max-height: 90vh;
     }
 
     .friends-container h2 {
@@ -450,12 +447,5 @@
     animation: slideInLeft 0.3s ease;
 }
 
-/* Empty state styling */
-.friends-list:empty::after {
-    content: 'No friends yet. Start adding friends!';
-    display: block;
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--text-tertiary, rgba(255,255,255,0.45));
-    font-style: italic;
-}
+/* Empty state is rendered by JS as a .empty-list child (see UIController), so no
+   generated `:empty` content here — that would double the message. */
