@@ -171,7 +171,8 @@
         </div>
     </div>
 
-    <!-- Main Menu -->
+    <!-- Main Menu — card-grid arcade layout. Each mode is a tile with Solo /
+         vs Friend / Ranked actions; a join-code card and a nav row sit below. -->
     <div id="main-menu" class="screen hidden">
         <div class="menu-header">
             <div id="user-section" class="user-info">
@@ -190,55 +191,89 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="menu-container">
             <h1>🌍 GeoGuesser</h1>
-            
-            <div class="menu-section">
-                <h2>Single Player</h2>
-                <div class="mode-selection">
-                    <button id="solo-world-btn" class="btn btn-primary">🌍 World Mode</button>
-                    <button id="solo-india-btn" class="btn btn-india">🇮🇳 India Mode</button>
-                    <button id="solo-europe-btn" class="btn btn-secondary">🇪🇺 Europe Mode</button>
-                    <button id="solo-us-btn" class="btn btn-secondary">🇺🇸 US Mode</button>
-                    <button id="solo-asia-btn" class="btn btn-secondary">🌏 Asia Mode</button>
-                    <button id="solo-landmarks-btn" class="btn btn-secondary">🏛️ Landmarks Mode</button>
+            <p class="menu-subtitle">Pick a region — then choose how to play</p>
+
+            <div class="mode-grid">
+                <div class="mode-card" data-mode="world">
+                    <div class="mode-card-emoji">🌍</div>
+                    <div class="mode-card-name">World</div>
+                    <div class="mode-card-desc">Anywhere on Earth</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-world-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-world-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-world-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
+                </div>
+
+                <div class="mode-card" data-mode="india">
+                    <div class="mode-card-emoji">🇮🇳</div>
+                    <div class="mode-card-name">India</div>
+                    <div class="mode-card-desc">From Kashmir to Kerala</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-india-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-india-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-india-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
+                </div>
+
+                <div class="mode-card" data-mode="europe">
+                    <div class="mode-card-emoji">🇪🇺</div>
+                    <div class="mode-card-name">Europe</div>
+                    <div class="mode-card-desc">41 countries, one continent</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-europe-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-europe-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-europe-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
+                </div>
+
+                <div class="mode-card" data-mode="us">
+                    <div class="mode-card-emoji">🇺🇸</div>
+                    <div class="mode-card-name">United States</div>
+                    <div class="mode-card-desc">Coast to coast</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-us-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-us-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-us-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
+                </div>
+
+                <div class="mode-card" data-mode="asia">
+                    <div class="mode-card-emoji">🌏</div>
+                    <div class="mode-card-name">Asia</div>
+                    <div class="mode-card-desc">Tokyo to Dubai</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-asia-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-asia-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-asia-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
+                </div>
+
+                <div class="mode-card" data-mode="landmarks">
+                    <div class="mode-card-emoji">🏛️</div>
+                    <div class="mode-card-name">Landmarks</div>
+                    <div class="mode-card-desc">World-famous icons</div>
+                    <div class="mode-card-actions">
+                        <button id="solo-landmarks-btn" class="mode-action mode-action--solo">🎮 Solo</button>
+                        <button id="create-landmarks-btn" class="mode-action mode-action--friend">👥 Friend</button>
+                        <button id="ranked-landmarks-btn" class="mode-action mode-action--ranked">⚡ Ranked</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="menu-section">
-                <h2>Play with Friend</h2>
-                <div class="friend-play-section">
-                    <div class="mode-selection">
-                        <button id="create-world-btn" class="btn btn-multiplayer">🌍 Create World Game</button>
-                        <button id="create-india-btn" class="btn btn-multiplayer">🇮🇳 Create India Game</button>
-                        <button id="create-europe-btn" class="btn btn-multiplayer">🇪🇺 Create Europe Game</button>
-                        <button id="create-us-btn" class="btn btn-multiplayer">🇺🇸 Create US Game</button>
-                        <button id="create-asia-btn" class="btn btn-multiplayer">🌏 Create Asia Game</button>
-                        <button id="create-landmarks-btn" class="btn btn-multiplayer">🏛️ Create Landmarks Game</button>
-                    </div>
-                    <div class="join-section">
-                        <input type="text" id="room-code-input" class="room-code-input" placeholder="Enter Room Code" maxlength="6">
-                        <button id="join-room-btn" class="btn btn-primary">Join</button>
-                    </div>
+            <div class="menu-footer">
+                <div class="join-card">
+                    <span class="join-card-label">Have a code?</span>
+                    <input type="text" id="room-code-input" class="room-code-input" placeholder="Enter code" maxlength="6" autocomplete="off">
+                    <button id="join-room-btn" class="btn btn-primary">Join</button>
                 </div>
-            </div>
-
-            <div class="menu-section">
-                <h2>Ranked</h2>
-                <div class="mode-selection">
-                    <button id="ranked-world-btn" class="btn btn-multiplayer">⚡ Find World Match</button>
-                    <button id="ranked-india-btn" class="btn btn-multiplayer">⚡ Find India Match</button>
-                    <button id="ranked-europe-btn" class="btn btn-multiplayer">⚡ Find Europe Match</button>
-                    <button id="ranked-us-btn" class="btn btn-multiplayer">⚡ Find US Match</button>
-                    <button id="ranked-asia-btn" class="btn btn-multiplayer">⚡ Find Asia Match</button>
-                    <button id="ranked-landmarks-btn" class="btn btn-multiplayer">⚡ Find Landmarks Match</button>
+                <div class="menu-nav">
+                    <button id="leaderboard-btn" class="nav-card">🏆 <span>Leaderboard</span></button>
+                    <button id="profile-btn" class="nav-card">🏅 <span>Profile</span></button>
                 </div>
-            </div>
-            
-            <div class="menu-section">
-                <button id="leaderboard-btn" class="btn btn-secondary">🏆 Leaderboard</button>
-                <button id="profile-btn" class="btn btn-secondary">🏅 Profile</button>
             </div>
         </div>
     </div>
