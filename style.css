@@ -71,6 +71,12 @@
     --z-base: 1; --z-header: 50; --z-overlay: 200; --z-map: 200;
     --z-modal: 10000; --z-toast: 10100; --z-banner: 100000;
 
+    /* Notch / home-indicator safe areas (0 on non-notched devices). */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+
     /* Press-feel shadows */
     --press-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
     --press-shadow-sm: 0 3px 0 rgba(0, 0, 0, 0.45);
@@ -115,10 +121,12 @@ body {
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
     height: 100vh;
+    height: 100dvh; /* dynamic viewport — doesn't hide bottom content behind the mobile URL bar */
     width: 100vw;
     background: var(--bg-deep);
     color: var(--ink);
     line-height: 1.55;
+    overscroll-behavior: none; /* stop pull-to-refresh fighting Street View pan / games */
 }
 
 h1, h2, h3 {
@@ -209,6 +217,7 @@ h1, h2, h3 {
     /* Clearance for the persistent fixed #app-header. The auth + game
        screens hide the header (see overrides below) so they stay full-bleed. */
     padding-top: var(--header-height);
+    padding-bottom: var(--safe-bottom);
 }
 .screen.hidden { display: none !important; }
 /* Auth has its own header-less full-bleed layout; the game screen has its own
@@ -239,7 +248,10 @@ h1, h2, h3 {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: 0 var(--space-6);
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: max(var(--space-6), calc(var(--safe-left) + var(--space-4)));
+    padding-right: max(var(--space-6), calc(var(--safe-right) + var(--space-4)));
     background: rgba(13, 8, 33, 0.82);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1215,6 +1227,7 @@ h1, h2, h3 {
     position: absolute;
     top: 0; left: 0; right: 0;
     padding: 12px 18px;
+    padding-top: calc(12px + var(--safe-top));
     background: linear-gradient(180deg, rgba(28, 18, 64, 0.97) 0%, rgba(28, 18, 64, 0.7) 70%, transparent 100%);
     display: flex;
     justify-content: space-between;
@@ -1278,7 +1291,7 @@ h1, h2, h3 {
 
 #map-container {
     position: absolute;
-    bottom: 20px; right: 20px;
+    bottom: calc(20px + var(--safe-bottom)); right: calc(20px + var(--safe-right));
     background: var(--bg-card);
     border-radius: var(--radius);
     border: 2px solid var(--gold);
@@ -1326,9 +1339,9 @@ h1, h2, h3 {
 #return-start-btn { margin-right: 6px; }
 
 /* In-game chat (bottom-left so it never sits under the guess map) */
-.chat-toggle { position: absolute; bottom: 16px; left: 16px; z-index: var(--z-overlay); }
+.chat-toggle { position: absolute; bottom: calc(16px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); z-index: var(--z-overlay); }
 .chat-panel {
-    position: absolute; bottom: 60px; left: 16px;
+    position: absolute; bottom: calc(60px + var(--safe-bottom)); left: calc(16px + var(--safe-left));
     width: min(280px, 80vw); max-height: 260px;
     background: var(--bg-card); color: var(--ink);
     border-radius: var(--radius);
@@ -2136,6 +2149,65 @@ h1, h2, h3 {
     .friend-actions .btn { flex: 1; }
     .search-container { flex-direction: column; }
     .search-container .btn { width: 100%; }
+}
+
+/* ---- Narrow phones: navbar + game-screen + tables ---- */
+@media (max-width: 600px) {
+    .arcade-logo { font-size: 0.68rem; letter-spacing: 0.5px; }
+    .arcade-header { gap: var(--space-2); }
+    .nav-name { max-width: 64px; }
+    .modal-content { padding: 24px; }
+}
+
+@media (max-width: 480px) {
+    /* Avatar-only chip — drop the username text so logo + 4 icons fit. */
+    .nav-name { display: none; }
+    .arcade-logo .logo-emoji { margin-right: 4px; }
+    /* Compass hidden on phones — Street View pan is the primary cue. */
+    .compass { display: none; }
+    /* Leaderboard: hide the low-value delta column; keep rank/name/score. */
+    .hs-table th:nth-child(4),
+    .hs-table td:nth-child(4) { display: none; }
+}
+
+/* ---- Game screen on mobile/tablet ---- */
+@media (max-width: 768px) {
+    /* Compact header chips so the bar wraps to at most ~2 rows. */
+    .score-info { gap: 8px; }
+    .score-info span { padding: 6px 10px; font-size: 0.74rem; }
+    .score-info span strong { font-size: 0.62rem; }
+    .mp-score { padding: 6px 10px; font-size: 0.74rem; }
+    /* Compass sits below a (possibly wrapped) header; cleared by the 480 rule. */
+    .compass { top: calc(104px + var(--safe-top)); right: calc(16px + var(--safe-right)); }
+    /* Map + controls fit one screen with the header. */
+    #map { height: clamp(180px, 38vh, 360px); }
+    /* Tables shrink + scroll instead of clip. */
+    .hs-table { font-size: 0.82rem; }
+    .hs-table th, .hs-table td { padding: 8px; }
+}
+
+/* Notched devices: the leaderboard / any wide table scrolls horizontally. */
+.hs-table { overflow-x: auto; }
+
+/* ---- Coarse pointers: bigger touch targets (keep 38px on desktop) ---- */
+@media (pointer: coarse) {
+    .nav-control { height: 40px; }
+    .nav-btn { width: 40px; }
+}
+
+/* ---- Short landscape phones: cap game boards so they fit without scroll ---- */
+@media (max-height: 500px) and (orientation: landscape) {
+    #snake-canvas,
+    #invaders-canvas,
+    #asteroids-canvas,
+    #pong-canvas,
+    #platformer-canvas,
+    #breakout-canvas {
+        max-height: 72dvh;
+        height: 72dvh;
+        width: auto;
+    }
+    #tetris-canvas { max-height: 78dvh; height: 78dvh; width: auto; }
 }
 
 @media (max-height: 700px) {
