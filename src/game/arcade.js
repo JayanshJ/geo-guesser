@@ -11,6 +11,17 @@ class ArcadeFX {
   constructor() {
     this.ctx = null;
     this.muted = false;
+    // Per-channel volumes (0..1). Stored values are applied when the gain
+    // nodes are created (lazily, on first _ensure()).
+    this.sfxVolume = 0.8;
+    this.musicVolume = 0.5;
+    this.sfxGain = null;
+    this.musicGain = null;
+    // Looping background-music scheduler state.
+    this.musicPlaying = false;
+    this._musicTimer = null;
+    this._nextNoteTime = 0;
+    this._musicStep = 0;
   }
 
   // Lazily create/resume the AudioContext. Must be called from a user gesture
@@ -21,6 +32,15 @@ class ArcadeFX {
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) return null;
       this.ctx = new Ctor();
+      // Two master gain nodes: one for SFX, one for music, so the settings
+      // sliders can adjust each channel independently and live.
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = this.sfxVolume;
+      this.sfxGain.connect(this.ctx.destination);
+      this.musicGain = this.ctx.createGain();
+      // Music is mixed a touch quieter than SFX by default.
+      this.musicGain.gain.value = this.musicVolume * 0.7;
+      this.musicGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
@@ -28,11 +48,34 @@ class ArcadeFX {
 
   setMuted(muted) {
     this.muted = !!muted;
-    if (this.muted && this.ctx) this.ctx.suspend();
+    if (this.muted) {
+      this.stopMusic();
+      if (this.ctx) this.ctx.suspend();
+    } else if (this.ctx) {
+      // Resume the context so SFX work. Music restart is owned by the
+      // MusicPlayer (it decides synth vs file track), so we don't startMusic()
+      // here — it would double-play or fight a selected file track.
+      this._ensure();
+    }
   }
 
   isMuted() {
     return this.muted;
+  }
+
+  // --- Volume (0..1). Live-adjusts the gain nodes; stored for later creation. ---
+  setSfxVolume(v) {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setTargetAtTime(this.sfxVolume, this.ctx.currentTime, 0.02);
+    }
+  }
+
+  setMusicVolume(v) {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    if (this.musicGain && this.ctx) {
+      this.musicGain.gain.setTargetAtTime(this.musicVolume * 0.7, this.ctx.currentTime, 0.02);
+    }
   }
 
   // Core tone: a simple envelope-shaped oscillator. `type` is the waveform,
@@ -49,9 +92,14 @@ class ArcadeFX {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(ctx.destination);
+    osc.connect(g).connect(this.sfxGain || ctx.destination);
     osc.start(t0);
     osc.stop(t0 + dur + 0.02);
+  }
+
+  // Short blip for UI button clicks.
+  playClick() {
+    this._tone({ type: 'square', freq: 660, endFreq: 920, dur: 0.05, gain: 0.1 });
   }
 
   // Coin/bleep on a normal guess.
@@ -92,6 +140,68 @@ class ArcadeFX {
     } else {
       this.playCoin();
     }
+  }
+
+  // --- Looping background arcade music -------------------------------------
+  // A procedurally-scheduled chiptune: a 16-step square-wave arpeggio over a
+  // triangle bassline + offbeat hi-hat blips, in A minor. Uses a lookahead
+  // scheduler (setInterval) that queues notes ~200ms ahead of ctx.currentTime
+  // for sample-accurate, gap-free looping. No audio files, no licensing.
+  startMusic() {
+    if (this.muted || this.musicPlaying) return;
+    const ctx = this._ensure();
+    if (!ctx) return;
+    this.musicPlaying = true;
+    this._nextNoteTime = ctx.currentTime + 0.1;
+    this._musicStep = 0;
+    this._musicTimer = setInterval(() => this._scheduleMusic(), 25);
+  }
+
+  stopMusic() {
+    this.musicPlaying = false;
+    if (this._musicTimer) {
+      clearInterval(this._musicTimer);
+      this._musicTimer = null;
+    }
+  }
+
+  _scheduleMusic() {
+    if (!this.musicPlaying || !this.ctx || !this.musicGain) return;
+    const stepDur = 0.14;
+    while (this._nextNoteTime < this.ctx.currentTime + 0.2) {
+      this._playMusicStep(this._musicStep, this._nextNoteTime);
+      this._nextNoteTime += stepDur;
+      this._musicStep = (this._musicStep + 1) % 16;
+    }
+  }
+
+  _playMusicStep(step, when) {
+    // A-minor arpeggio across the bar (A4 C5 E5 A5 ...).
+    const arp = [440, 523, 659, 880, 659, 523, 440, 330,
+      440, 523, 659, 880, 1047, 880, 659, 523];
+    this._musicNote('square', arp[step], when, 0.12, 0.09);
+    // Bassline: one note per beat (every 4 steps): A2 A2 E2 G2.
+    if (step % 4 === 0) {
+      const bass = [110, 110, 82.41, 98];
+      this._musicNote('triangle', bass[step / 4], when, 0.52, 0.16);
+    }
+    // Crisp hi-hat-ish blip on offbeats.
+    if (step % 2 === 1) this._musicNote('square', 1800, when, 0.03, 0.03);
+  }
+
+  _musicNote(type, freq, when, dur, gain) {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicGain) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, when);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(gain, when + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(g).connect(this.musicGain);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
   }
 
   // Confetti burst over the current screen. Creates a throwaway full-viewport

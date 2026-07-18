@@ -7,6 +7,7 @@ import { multiplayerService } from '../services/multiplayer.js';
 import { friendsService } from '../services/friends.js';
 import { getModeMeta } from '../game/locations.js';
 import { arcadeFX } from '../game/arcade.js';
+import { musicPlayer } from '../game/music.js';
 import { ACHIEVEMENTS, ALL_MODES, availablePins, pinEmoji } from '../game/achievements.js';
 import { ARCADE_MAP_STYLE } from '../game/mapStyle.js';
 
@@ -573,14 +574,29 @@ class UIController {
     await this.renderLeaderboard();
   }
 
+  async setLeaderboardView(view) {
+    this.leaderboardView = view === 'elo' ? 'elo' : 'score';
+    await this.renderLeaderboard();
+  }
+
   async renderLeaderboard() {
     const content = document.getElementById('leaderboard-content');
     const isElo = this.leaderboardView === 'elo';
-    const toggleLabel = isElo ? '🏆 Switch to Top Scores' : '⚡ Switch to Top Ratings';
     const heading = isElo ? '⚡ Top Ratings' : '🏆 Top Scores';
 
-    content.innerHTML = `<div class="leaderboard-toggle"><button id="leaderboard-toggle-btn" class="btn btn-small">${toggleLabel}</button></div><h3>${heading}</h3><div id="leaderboard-list"></div>`;
-    document.getElementById('leaderboard-toggle-btn').addEventListener('click', () => this.toggleLeaderboardView());
+    content.innerHTML = `
+      <div class="arcade-tabs" role="tablist">
+        <button class="arcade-tab${isElo ? '' : ' active'}" data-view="score" type="button">🏆 Top Scores</button>
+        <button class="arcade-tab${isElo ? ' active' : ''}" data-view="elo" type="button">⚡ Top Ratings</button>
+      </div>
+      <h3>${heading}</h3>
+      <div id="leaderboard-list"></div>`;
+    content.querySelectorAll('.arcade-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-view');
+        if (view !== this.leaderboardView) this.setLeaderboardView(view);
+      });
+    });
 
     const list = document.getElementById('leaderboard-list');
     list.innerHTML = '<div class="leaderboard-empty">Loading...</div>';
@@ -868,25 +884,122 @@ class UIController {
     ctx.fillText(String(history[history.length - 1]), W - pad - 30, H - 4);
   }
 
-  // Sound toggle: reflects + persists the arcade-FX mute state. The button
-  // label swaps between 🔊 / 🔇.
+  // Sound toggle + arcade audio setup. Reflects/persists the mute state,
+  // loads saved music/SFX volumes, wires the settings modal, starts the
+  // background music on the first user gesture (autoplay policy), and plays
+  // a click blip on every button press.
   initSoundToggle() {
     const btn = document.getElementById('sound-toggle-btn');
     if (!btn) return;
+
+    // Restore saved volumes (default music 50, SFX 80).
+    const musicVol = Number(localStorage.getItem('geoguesser_music_volume') ?? 50) / 100;
+    const sfxVol = Number(localStorage.getItem('geoguesser_sfx_volume') ?? 80) / 100;
+    arcadeFX.setSfxVolume(sfxVol);
+    musicPlayer.init(musicVol); // sets music volume + loads the saved track (no playback yet)
+
     const stored = localStorage.getItem('geoguesser_muted') === '1';
-    arcadeFX.setMuted(stored);
+    musicPlayer.setMuted(stored);
     btn.textContent = stored ? '🔇' : '🔊';
     btn.addEventListener('click', () => this.toggleSound());
+
+    this.initSettings();
+    this.initClickSounds();
+    this.initMusicAutostart();
   }
 
   toggleSound() {
     const btn = document.getElementById('sound-toggle-btn');
-    const muted = !arcadeFX.isMuted();
-    arcadeFX.setMuted(muted);
+    const muted = !musicPlayer.isMuted();
+    musicPlayer.setMuted(muted);
     localStorage.setItem('geoguesser_muted', muted ? '1' : '0');
     if (btn) btn.textContent = muted ? '🔇' : '🔊';
     // Play a coin so the user hears the new (un-muted) state immediately.
     if (!muted) arcadeFX.playCoin();
+  }
+
+  // Settings modal: music track dropdown + volume sliders for music + sound FX.
+  initSettings() {
+    const musicSlider = document.getElementById('music-volume-slider');
+    const sfxSlider = document.getElementById('sfx-volume-slider');
+    const musicVal = document.getElementById('music-volume-val');
+    const sfxVal = document.getElementById('sfx-volume-val');
+
+    // Populate the track dropdown from musicPlayer.tracks.
+    const trackSelect = document.getElementById('music-track-select');
+    if (trackSelect) {
+      trackSelect.innerHTML = '';
+      musicPlayer.tracks.forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        trackSelect.appendChild(opt);
+      });
+      trackSelect.value = musicPlayer.currentId;
+      trackSelect.addEventListener('change', () => {
+        musicPlayer.selectTrack(trackSelect.value);
+      });
+    }
+
+    if (musicSlider) {
+      musicSlider.value = Number(localStorage.getItem('geoguesser_music_volume') ?? 50);
+      if (musicVal) musicVal.textContent = musicSlider.value;
+      musicSlider.addEventListener('input', () => {
+        const v = Number(musicSlider.value);
+        musicPlayer.setVolume(v / 100);
+        localStorage.setItem('geoguesser_music_volume', String(v));
+        if (musicVal) musicVal.textContent = v;
+      });
+    }
+    if (sfxSlider) {
+      sfxSlider.value = Number(localStorage.getItem('geoguesser_sfx_volume') ?? 80);
+      if (sfxVal) sfxVal.textContent = sfxSlider.value;
+      sfxSlider.addEventListener('input', () => {
+        const v = Number(sfxSlider.value);
+        arcadeFX.setSfxVolume(v / 100);
+        localStorage.setItem('geoguesser_sfx_volume', String(v));
+        if (sfxVal) sfxVal.textContent = v;
+        // Audible feedback while tweaking SFX volume.
+        if (!arcadeFX.isMuted()) arcadeFX.playClick();
+      });
+    }
+
+    document.getElementById('settings-btn')?.addEventListener('click', () => this.openSettings());
+    document.getElementById('close-settings-btn')?.addEventListener('click', () => this.closeSettings());
+    // Backdrop click closes.
+    const modal = document.getElementById('settings-modal');
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeSettings();
+    });
+  }
+
+  openSettings() {
+    document.getElementById('settings-modal')?.classList.remove('hidden');
+  }
+
+  closeSettings() {
+    document.getElementById('settings-modal')?.classList.add('hidden');
+  }
+
+  // Play a short blip on any button-style control click (delegated, one
+  // listener). Honors mute via arcadeFX._ensure().
+  initClickSounds() {
+    const CLICKABLE = 'button, .mode-action, .nav-card, .arcade-tab, .time-option-btn, .pin-option';
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest(CLICKABLE)) arcadeFX.playClick();
+    }, true);
+  }
+
+  // Browsers block audio until a user gesture; start the background music on
+  // the first pointerdown (once). No-op if muted.
+  initMusicAutostart() {
+    const start = () => {
+      musicPlayer.start();
+      window.removeEventListener('pointerdown', start);
+      window.removeEventListener('keydown', start);
+    };
+    window.addEventListener('pointerdown', start);
+    window.addEventListener('keydown', start);
   }
 
   // Pop a toast for each newly-unlocked achievement id. Stacks vertically,

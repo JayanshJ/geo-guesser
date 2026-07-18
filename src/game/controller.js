@@ -589,8 +589,8 @@ class GameController {
       result.distance < 1
         ? Math.round(result.distance * 1000) + ' m'
         : Math.round(result.distance) + ' km';
-    document.getElementById('result-points').textContent = result.points.toLocaleString();
-    document.getElementById('result-total').textContent = this.game.score.toLocaleString();
+    this.animateCount(document.getElementById('result-points'), result.points, 850);
+    this.animateCount(document.getElementById('result-total'), this.game.score, 850);
 
     this.game.resultMap = new google.maps.Map(document.getElementById('result-map'), {
       streetViewControl: false,
@@ -743,8 +743,27 @@ class GameController {
     }
   }
 
+  // Count a number up from 0 to `target` inside `el` over ~1.1s with an
+  // easeOutCubic settle. Respects prefers-reduced-motion (instant). Pure UI —
+  // does not touch game state or scoring.
+  animateCount(el, target, duration = 1100) {
+    if (!el) return;
+    const reduce = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !target) { el.textContent = target.toLocaleString(); return; }
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(target * eased).toLocaleString();
+      if (t < 1) requestAnimationFrame(tick);
+      else el.textContent = target.toLocaleString();
+    };
+    requestAnimationFrame(tick);
+  }
+
   async showFinalScore() {
-    document.getElementById('final-score').textContent = this.game.score.toLocaleString();
+    this.animateCount(document.getElementById('final-score'), this.game.score);
 
     const summaryContainer = document.getElementById('round-summary');
     summaryContainer.innerHTML = '<h3>Round Breakdown</h3>';
@@ -801,22 +820,30 @@ class GameController {
         }
       }
 
-      sortedPlayers.forEach((player, index) => {
+      // HIGH-SCORE style ranking table (alternating row tint, gold/silver/
+      // bronze ranks, pixel-font score). Rendering only — the ELO math above
+      // is unchanged.
+      const rows = sortedPlayers.map((player, index) => {
         const isYou = player.uid === authService.user.uid;
-        const playerScore = document.createElement('div');
-        playerScore.className = 'mp-player-final-score';
-        const ratingLabel = typeof player.eloStart === 'number'
-          ? ` · ${player.eloStart}⚡`
+        const rating = typeof player.eloStart === 'number'
+          ? `<span class="hs-elo">${player.eloStart}⚡</span>`
           : '';
-        const youDelta = isYou && myEloDelta !== 0
-          ? ` <span style="color:${myEloDelta > 0 ? '#4CAF50' : '#f44336'}">(${myEloDelta > 0 ? '+' : ''}${myEloDelta})</span>`
+        const delta = isYou && myEloDelta !== 0
+          ? ` <span class="${myEloDelta > 0 ? 'hs-delta-up' : 'hs-delta-down'}">(${myEloDelta > 0 ? '+' : ''}${myEloDelta})</span>`
           : '';
-        playerScore.innerHTML = `
-          <span>${index + 1}. ${isYou ? '<strong>You</strong>' : player.displayName}${ratingLabel}${youDelta}</span>
-          <span style="color: #4CAF50; font-weight: bold;">${player.score} pts</span>
-        `;
-        mpStandingsDiv.appendChild(playerScore);
-      });
+        const name = `${player.displayName}${isYou ? '<span class="you-tag">YOU</span>' : ''}${rating}${delta}`;
+        return `<tr class="${isYou ? 'is-you' : ''}">
+          <td class="hs-rank">${index + 1}</td>
+          <td class="hs-name">${name}</td>
+          <td class="hs-score">${player.score.toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+      mpStandingsDiv.innerHTML = `
+        <h3>Final Standings</h3>
+        <table class="hs-table">
+          <thead><tr><th>Rank</th><th>Player</th><th>Score</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
 
       // Multiplayer win-streak achievement (5 wins in a row). A non-win
       // breaks the streak. Toast if this hit the threshold.
