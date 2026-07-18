@@ -41,8 +41,13 @@ class MultiplayerService {
   }
 
   // Generate `count` curated coords for the given mode (shared generator).
+  // Excludes coords used in the host's recent games for cross-game variety,
+  // then records the picks as used.
   generateLocationsForMode(mode, count) {
-    return LocationGenerator.curated(mode, count);
+    const recent = LocationGenerator.recentForMode(mode);
+    const picks = LocationGenerator.curated(mode, count, recent);
+    LocationGenerator.markUsed(mode, picks);
+    return picks;
   }
 
   async createGame(mode, timeControl = 'unlimited', maxPlayers = 8, nmpz = false) {

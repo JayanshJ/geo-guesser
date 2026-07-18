@@ -35,6 +35,26 @@ export const MODES = {
       { lat: 52.3676, lng: 4.9041 },   // Amsterdam
       { lat: 48.2082, lng: 16.3738 },  // Vienna
       { lat: 37.9715, lng: 23.7257 },  // Acropolis, Athens
+      { lat: 19.4326, lng: -99.1332 }, // Mexico City
+      { lat: -34.6037, lng: -58.3816 },// Buenos Aires
+      { lat: -23.5505, lng: -46.6333 },// São Paulo
+      { lat: 59.9139, lng: 10.7522 },  // Oslo
+      { lat: 60.1699, lng: 24.9384 },  // Helsinki
+      { lat: 64.1466, lng: -21.9426 }, // Reykjavik
+      { lat: 45.4215, lng: -75.6972 }, // Ottawa
+      { lat: 49.2827, lng: -123.1207 },// Vancouver
+      { lat: -1.2921, lng: 36.8219 },  // Nairobi
+      { lat: 6.5244, lng: 3.3792 },    // Lagos
+      { lat: 30.0444, lng: 31.2357 },  // Cairo
+      { lat: -37.8136, lng: 144.9631 },// Melbourne
+      { lat: 4.7110, lng: -74.0721 },  // Bogotá
+      { lat: -12.0464, lng: -77.0428 },// Lima
+      { lat: 35.6762, lng: 139.6503 }, // Shinjuku, Tokyo
+      { lat: -17.9243, lng: 25.8567 }, // Victoria Falls
+      { lat: 7.2906, lng: 80.6337 },   // Kandy, Sri Lanka
+      { lat: -33.9577, lng: 18.4030 }, // Table Mountain, Cape Town
+      { lat: 13.7563, lng: 100.5018 }, // Bangkok
+      { lat: 6.9271, lng: 79.8612 },   // Colombo
     ],
   },
   india: {
@@ -64,6 +84,25 @@ export const MODES = {
       { lat: 31.1048, lng: 77.1734 },  // Shimla
       { lat: 27.0410, lng: 88.2663 },  // Darjeeling
       { lat: 30.1086, lng: 78.2944 },  // Rishikesh
+      { lat: 28.5245, lng: 77.1855 },  // Qutub Minar, Delhi
+      { lat: 19.0760, lng: 72.8777 },  // Marine Drive, Mumbai
+      { lat: 12.6193, lng: 80.0488 },  // Mahabalipuram
+      { lat: 26.1445, lng: 92.7336 },  // Guwahati
+      { lat: 10.8505, lng: 76.2711 },  // Thrissur
+      { lat: 32.0828, lng: 77.5420 },  // Manali
+      { lat: 34.1526, lng: 77.5771 },  // Leh
+      { lat: 21.1458, lng: 79.0882 },  // Nagpur
+      { lat: 22.3077, lng: 73.2850 },  // Vadodara
+      { lat: 26.2389, lng: 73.0258 },  // Jodhpur
+      { lat: 30.7333, lng: 76.7794 },  // Chandigarh
+      { lat: 8.0883, lng: 77.5417 },   // Kanyakumari
+      { lat: 19.9975, lng: 73.7898 },  // Nashik
+      { lat: 23.1765, lng: 75.7772 },  // Ujjain
+      { lat: 25.5941, lng: 85.1376 },  // Patna
+      { lat: 22.8045, lng: 86.2029 },  // Jamshedpur
+      { lat: 16.7050, lng: 74.2433 },  // Kolhapur
+      { lat: 28.4089, lng: 77.3178 },  // Noida
+      { lat: 24.5854, lng: 73.7125 },  // Lake Pichola, Udaipur
     ],
   },
   europe: {
@@ -93,6 +132,25 @@ export const MODES = {
       { lat: 50.8466, lng: 4.3528 },   // Brussels
       { lat: 48.1351, lng: 11.5820 },  // Munich
       { lat: 47.3769, lng: 8.5417 },   // Zurich
+      { lat: 59.9139, lng: 10.7522 },  // Oslo
+      { lat: 60.1699, lng: 24.9384 },  // Helsinki
+      { lat: 64.1466, lng: -21.9426 }, // Reykjavik
+      { lat: 54.5973, lng: -5.9301 },  // Belfast
+      { lat: 55.9533, lng: -3.1883 },  // Edinburgh
+      { lat: 53.4808, lng: -2.2426 },  // Manchester
+      { lat: 44.4268, lng: 26.1025 },  // Bucharest
+      { lat: 42.6977, lng: 23.3219 },  // Sofia
+      { lat: 45.8150, lng: 15.9819 },  // Zagreb
+      { lat: 46.0569, lng: 14.5058 },  // Ljubljana
+      { lat: 43.7384, lng: 7.4246 },   // Nice
+      { lat: 45.7640, lng: 4.8357 },   // Lyon
+      { lat: 53.5511, lng: 9.9937 },   // Hamburg
+      { lat: 51.2277, lng: 6.7735 },   // Düsseldorf
+      { lat: 41.1579, lng: -8.6291 },  // Porto
+      { lat: 39.5804, lng: 2.6557 },   // Palma de Mallorca
+      { lat: 40.6401, lng: 22.9444 },  // Thessaloniki
+      { lat: 47.2692, lng: 11.4041 },  // Innsbruck
+      { lat: 41.9981, lng: 21.4254 },  // Skopje
     ],
   },
   us: {
@@ -122,6 +180,27 @@ export const MODES = {
       { lat: 61.2181, lng: -149.9003 },// Anchorage
       { lat: 40.7683, lng: -111.8678 },// Salt Lake City
       { lat: 32.7765, lng: -79.9311 }, // Charleston
+      { lat: 35.7796, lng: -78.6382 }, // Raleigh
+      { lat: 39.9612, lng: -82.9982 }, // Columbus
+      { lat: 42.3314, lng: -83.0452 }, // Detroit
+      { lat: 44.9778, lng: -93.2650 }, // Minneapolis
+      { lat: 35.1495, lng: -90.0490 }, // Memphis
+      { lat: 33.7490, lng: -84.3880 }, // Atlanta
+      { lat: 27.9506, lng: -82.4572 }, // Tampa
+      { lat: 28.5383, lng: -81.3792 }, // Orlando
+      { lat: 41.8240, lng: -71.4128 }, // Providence
+      { lat: 43.6591, lng: -70.2568 }, // Portland, ME
+      { lat: 38.5816, lng: -121.4944 },// Sacramento
+      { lat: 35.4676, lng: -97.5164 }, // Oklahoma City
+      { lat: 29.7604, lng: -95.3698 }, // Houston
+      { lat: 35.0844, lng: -106.6504 },// Albuquerque
+      { lat: 43.6150, lng: -116.2023 },// Boise
+      { lat: 42.8864, lng: -78.8784 }, // Buffalo
+      { lat: 40.4406, lng: -79.9959 }, // Pittsburgh
+      { lat: 39.7684, lng: -86.1581 }, // Indianapolis
+      { lat: 39.0997, lng: -94.5786 }, // Kansas City
+      { lat: 32.2226, lng: -110.9747 },// Tucson
+      { lat: 32.0809, lng: -81.0912 }, // Savannah
     ],
   },
   asia: {
@@ -151,6 +230,25 @@ export const MODES = {
       { lat: 34.6937, lng: 135.5023 },// Osaka
       { lat: -8.4095, lng: 115.1889 },// Bali
       { lat: 10.8231, lng: 106.6297 },// Ho Chi Minh City
+      { lat: 22.5431, lng: 114.0579 },// Shenzhen
+      { lat: 23.1291, lng: 113.2644 },// Guangzhou
+      { lat: 30.5728, lng: 104.0668 },// Chengdu
+      { lat: 29.5630, lng: 106.5516 },// Chongqing
+      { lat: 23.8103, lng: 90.4125 }, // Dhaka
+      { lat: 7.2906, lng: 80.6337 },  // Kandy
+      { lat: 35.6892, lng: 51.3890 }, // Tehran
+      { lat: 24.7136, lng: 46.6753 }, // Riyadh
+      { lat: 24.8607, lng: 67.0011 }, // Karachi
+      { lat: 31.5497, lng: 74.3436 }, // Lahore
+      { lat: 33.6844, lng: 73.0479 }, // Islamabad
+      { lat: 43.2551, lng: 76.9126 }, // Almaty
+      { lat: 41.3275, lng: 69.2817 }, // Tashkent
+      { lat: 13.3671, lng: 103.8448 },// Siem Reap (Angkor)
+      { lat: 33.5904, lng: 130.4017 },// Fukuoka
+      { lat: 43.0618, lng: 141.3545 },// Sapporo
+      { lat: 35.1815, lng: 136.9066 },// Nagoya
+      { lat: 35.1796, lng: 129.0756 },// Busan
+      { lat: 10.3157, lng: 123.8854 },// Cebu
     ],
   },
   landmarks: {
@@ -180,6 +278,27 @@ export const MODES = {
       { lat: -22.9519, lng: -43.2105 }, // Christ the Redeemer, Rio
       { lat: 37.9715, lng: 23.7257 },   // Acropolis
       { lat: 30.3285, lng: 35.4444 },    // Petra area
+      { lat: 40.7484, lng: -73.9857 },   // Empire State Building, NYC
+      { lat: 43.6426, lng: -79.3871 },   // CN Tower, Toronto
+      { lat: -13.1631, lng: -72.5450 },  // Machu Picchu
+      { lat: 20.6843, lng: -88.5678 },   // Chichen Itza
+      { lat: 38.6270, lng: -90.1994 },   // Gateway Arch, St. Louis
+      { lat: 31.7766, lng: 35.2345 },    // Jerusalem
+      { lat: 35.0394, lng: 135.7292 },   // Kinkaku-ji, Kyoto
+      { lat: 34.9969, lng: 135.7850 },   // Fushimi Inari, Kyoto
+      { lat: -33.9577, lng: 18.4030 },   // Table Mountain, Cape Town
+      { lat: 34.1341, lng: -118.3215 },  // Hollywood Sign, LA
+      { lat: 34.1184, lng: -118.3004 },  // Griffith Observatory, LA
+      { lat: 47.6205, lng: -122.3493 },  // Space Needle, Seattle
+      { lat: 40.6892, lng: -74.0445 },   // Statue of Liberty, NYC
+      { lat: 40.7061, lng: -73.9969 },   // Brooklyn Bridge, NYC
+      { lat: 51.5055, lng: -0.0754 },    // Tower Bridge, London
+      { lat: 55.9489, lng: -3.1994 },    // Edinburgh Castle
+      { lat: 47.5576, lng: 10.7498 },    // Neuschwanstein Castle
+      { lat: 48.6360, lng: -1.5115 },    // Mont Saint-Michel
+      { lat: 43.7230, lng: 10.3966 },    // Leaning Tower of Pisa
+      { lat: 43.7696, lng: 11.2558 },    // Florence (Duomo)
+      { lat: 42.6507, lng: 18.0944 },    // Dubrovnik old town
     ],
   },
 };
@@ -195,8 +314,10 @@ function shuffle(array) {
 export class LocationGenerator {
   // Synchronous curated pick. Samples `count` coords for the mode, shuffling
   // and refilling (with replacement) if the list is smaller than count. Falls
-  // back to a random coord only if a mode has no curated list.
-  static curated(mode, count) {
+  // back to a random coord only if a mode has no curated list. `exclude` is an
+  // optional list of {lat,lng} coords to skip (e.g. coords already used this
+  // game, so a coverage-failure swap can't repeat a round).
+  static curated(mode, count, exclude = []) {
     const def = MODES[mode] || MODES.world;
     const list = def.curated && def.curated.length ? def.curated : null;
     if (!list) {
@@ -204,9 +325,15 @@ export class LocationGenerator {
       for (let i = 0; i < count; i++) out.push(this.randomForMode(mode));
       return out;
     }
-    const pool = shuffle([...list]);
+    const isExcluded = (c) =>
+      exclude.some(
+        (e) => e && Math.abs(e.lat - c.lat) < 1e-6 && Math.abs(e.lng - c.lng) < 1e-6,
+      );
+    const pool = shuffle([...list]).filter((c) => !isExcluded(c));
     const result = [];
     for (let i = 0; i < count; i++) {
+      // Refill from the full list (including excluded) only if the filtered
+      // pool is exhausted — avoids an infinite loop if exclude covers everything.
       if (pool.length === 0) pool.push(...shuffle([...list]));
       result.push(pool.pop());
     }
@@ -234,6 +361,48 @@ export class LocationGenerator {
       console.warn('Street View metadata check failed:', e);
       return true; // don't block the game on a network hiccup
     }
+  }
+
+  // --- Cross-game variety memory -----------------------------------------
+  // Persist the most recently used coords per mode so consecutive games don't
+  // keep landing on the same handful of spots. Stored in localStorage as a
+  // capped, ordered list. Generation entry points call recentForMode() to get
+  // an exclude set, pick from the rest, then markUsed() the picks. The pure
+  // game-math functions (computeScore, computeSpeedBonus, …) are unaffected;
+  // these are the only localStorage-touching helpers.
+  static _recentKey(mode) { return `geoguesser_recent_${mode}`; }
+
+  static recentForMode(mode) {
+    try {
+      const raw = localStorage.getItem(this._recentKey(mode));
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr)
+        ? arr.filter((c) => c && typeof c.lat === 'number' && typeof c.lng === 'number')
+        : [];
+    } catch { return []; }
+  }
+
+  // Append `coords` to the per-mode recent list, dropping the oldest beyond a
+  // cap that leaves enough headroom for the next game to always find fresh
+  // spots (cap = list.length - 8, min 20).
+  static markUsed(mode, coords) {
+    if (!Array.isArray(coords) || coords.length === 0) return;
+    const def = MODES[mode] || MODES.world;
+    const list = def.curated || [];
+    const cap = Math.max(20, list.length - 8);
+    const key = (c) => `${Number(c.lat).toFixed(4)},${Number(c.lng).toFixed(4)}`;
+    const seen = new Set(this.recentForMode(mode).map(key));
+    for (const c of coords) {
+      if (c && typeof c.lat === 'number' && typeof c.lng === 'number') seen.add(key(c));
+    }
+    // Set preserves insertion order; slice(-cap) keeps the most recent and
+    // drops the oldest so the memory never grows unbounded.
+    const stored = [...seen].slice(-cap).map((k) => {
+      const [lat, lng] = k.split(',').map(Number);
+      return { lat, lng };
+    });
+    try { localStorage.setItem(this._recentKey(mode), JSON.stringify(stored)); } catch { /* ignore quota */ }
   }
 
   // Pick `count` coords confirmed (via metadata) to have Street View. Used as a

@@ -125,6 +125,8 @@ class GameController {
     // Multiplayer uses shared locations from Firestore; solo generates locally.
     if (isMultiplayer && multiplayerService.currentGame && multiplayerService.currentGame.data.locations) {
       this.game.gameLocations = multiplayerService.currentGame.data.locations;
+      // Record the shared spots as used so this player's future games avoid them.
+      LocationGenerator.markUsed(this.game.mode, this.game.gameLocations);
       this.game.isHost = multiplayerService.currentGame.data.host.uid === authService.user.uid;
       if (multiplayerService.currentGame.data.resolvedLocations &&
           Object.keys(multiplayerService.currentGame.data.resolvedLocations).length > 0) {
@@ -183,7 +185,12 @@ class GameController {
   }
 
   getLocationsForMode() {
-    return LocationGenerator.curated(this.game.mode, this.game.totalRounds);
+    // Exclude coords used in recent games so consecutive games don't keep
+    // landing on the same spots, then record the picks as used.
+    const recent = LocationGenerator.recentForMode(this.game.mode);
+    const picks = LocationGenerator.curated(this.game.mode, this.game.totalRounds, recent);
+    LocationGenerator.markUsed(this.game.mode, picks);
+    return picks;
   }
 
   loadRound() {
@@ -326,7 +333,9 @@ class GameController {
     let location = startLocation;
     for (let i = 0; i < 8; i++) {
       if (await LocationGenerator.hasStreetView(location, apiKey)) break;
-      location = LocationGenerator.curated(this.game.mode, 1)[0];
+      // Swap to a different curated spot — exclude coords already used this
+      // game so a coverage failure never repeats an existing round's location.
+      location = LocationGenerator.curated(this.game.mode, 1, this.game.gameLocations)[0];
     }
 
     streetViewService.getPanorama(
@@ -353,8 +362,12 @@ class GameController {
           this.startTimer();
         } else {
           // getPanorama still failed (rare after pre-validation): retry with a
-          // fresh curated candidate.
-          this.game.currentLocation = LocationGenerator.curated(this.game.mode, 1)[0];
+          // fresh curated candidate (excluding already-used round locations).
+          this.game.currentLocation = LocationGenerator.curated(
+            this.game.mode,
+            1,
+            this.game.gameLocations,
+          )[0];
           this.findStreetViewLocation(this.game.currentLocation);
         }
       }

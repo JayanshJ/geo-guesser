@@ -17,6 +17,30 @@
     <div class="starfield" aria-hidden="true"></div>
     <div id="crt-overlay" aria-hidden="true"></div>
 
+    <!-- Persistent arcade navbar. Sits above every screen; hidden on the auth
+         and in-game screens (UIController.showScreen toggles #app-header). IDs
+         are unchanged from when this lived inside #main-menu, so all existing
+         wiring (auth.updateUI, UIController listeners) keeps working. -->
+    <header id="app-header" class="arcade-header hidden">
+        <div class="arcade-header-left">
+            <button id="back-to-arcade-btn" class="nav-control nav-btn nav-back hidden" title="Back to Arcade">◂ ARCADE</button>
+            <div class="arcade-logo"><span class="logo-emoji">🌍</span>GEOGUESSER</div>
+        </div>
+        <div class="arcade-header-actions">
+            <div class="nav-control user-chip">
+                <span class="nav-avatar" id="user-avatar-text">🎮</span>
+                <span id="user-name" class="nav-name"></span>
+                <!-- #user-email is kept in the DOM for auth.js updateUI() but is
+                     never displayed in the compact chip (hidden via CSS). -->
+                <span id="user-email" class="hidden"></span>
+            </div>
+            <button id="friends-btn" class="nav-control nav-btn nav-btn--label hidden" title="Friends"><span class="nav-ico">👥</span><span class="nav-label">Friends</span></button>
+            <button id="settings-btn" class="nav-control nav-btn" title="Settings"><span class="nav-ico">⚙️</span></button>
+            <button id="sound-toggle-btn" class="nav-control nav-btn" title="Sound"><span class="nav-ico">🔊</span></button>
+            <button id="signout-btn" class="nav-control nav-btn hidden" title="Reset"><span class="nav-ico">⎋</span></button>
+        </div>
+    </header>
+
     <!-- Welcome Screen -->
     <div id="auth-section" class="screen">
         <div class="auth-container">
@@ -152,25 +176,83 @@
     <!-- Main Menu — slim arcade header, compact hero, 3×2 region grid, and an
          aligned bottom row (join panel spans two columns; leaderboard + profile
          tiles split the third). All mode/nav/join IDs preserved for UIController. -->
-    <div id="main-menu" class="screen hidden">
-        <header class="arcade-header">
-            <div class="arcade-logo"><span class="logo-emoji">🌍</span>GEOGUESSER</div>
-            <div class="arcade-header-actions">
-                <div class="user-chip">
-                    <span class="user-chip-avatar" id="user-avatar-text">🎮</span>
-                    <span id="user-name" class="user-chip-name"></span>
-                    <!-- #user-email is kept in the DOM for auth.js updateUI() but is
-                         never displayed in the compact chip (hidden via CSS). -->
-                    <span id="user-email" class="hidden"></span>
-                </div>
-                <button id="change-name-btn" class="btn btn-small btn-icon" title="Change name">✏️</button>
-                <button id="friends-btn" class="btn btn-small btn-icon hidden" title="Friends">👥</button>
-                <button id="settings-btn" class="btn btn-small btn-icon" title="Settings">⚙️</button>
-                <button id="sound-toggle-btn" class="btn btn-small btn-icon" title="Toggle sound">🔊</button>
-                <button id="signout-btn" class="btn btn-small btn-icon hidden" title="Sign out">⎋</button>
+    <!-- Arcade Hub — game select (homepage). -->
+    <div id="arcade-hub" class="screen hidden">
+        <div class="hub-wrap">
+            <div class="hub-hero">
+                <h1 data-arcade-name>THE ARCADE</h1>
+                <p class="tagline">Pick a cabinet. Insert coin. Go.</p>
+                <div class="hub-prompt">▸ SELECT A GAME</div>
             </div>
-        </header>
+            <div class="cabinet-grid">
+                <div class="cabinet" data-game="geoguesser">
+                    <div class="cabinet-emoji">🌍</div>
+                    <div class="cabinet-title">GEOGUESSER</div>
+                    <div class="cabinet-desc">Spot the world. Score big.</div>
+                    <div class="cabinet-stat" id="hs-geoguesser">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-geoguesser-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="tetris">
+                    <div class="cabinet-emoji">🧱</div>
+                    <div class="cabinet-title">TETRIS</div>
+                    <div class="cabinet-desc">Stack. Clear. Survive.</div>
+                    <div class="cabinet-stat" id="hs-tetris">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-tetris-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="breakout">
+                    <div class="cabinet-emoji">🔨</div>
+                    <div class="cabinet-title">BREAKOUT</div>
+                    <div class="cabinet-desc">Smash every brick.</div>
+                    <div class="cabinet-stat" id="hs-breakout">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-breakout-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="snake">
+                    <div class="cabinet-emoji">🐍</div>
+                    <div class="cabinet-title">SNAKE</div>
+                    <div class="cabinet-desc">Eat. Grow. Don't bite yourself.</div>
+                    <div class="cabinet-stat" id="hs-snake">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-snake-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="invaders">
+                    <div class="cabinet-emoji">👾</div>
+                    <div class="cabinet-title">SPACE INVADERS</div>
+                    <div class="cabinet-desc">The classics never die. You will.</div>
+                    <div class="cabinet-stat" id="hs-invaders">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-invaders-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="asteroids">
+                    <div class="cabinet-emoji">🪨</div>
+                    <div class="cabinet-title">ASTEROIDS</div>
+                    <div class="cabinet-desc">Nothing but you, rocks, and physics.</div>
+                    <div class="cabinet-stat" id="hs-asteroids">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-asteroids-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="pong">
+                    <div class="cabinet-emoji">🏓</div>
+                    <div class="cabinet-title">PONG</div>
+                    <div class="cabinet-desc">The original. Now with friends.</div>
+                    <div class="cabinet-stat" id="hs-pong">BEST RALLY: —</div>
+                    <button class="cabinet-play" id="play-pong-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet" data-game="platformer">
+                    <div class="cabinet-emoji">🏃</div>
+                    <div class="cabinet-title">GLOW RUNNER</div>
+                    <div class="cabinet-desc">Run. Jump. Glow.</div>
+                    <div class="cabinet-stat" id="hs-platformer">CLEARED: 0/4</div>
+                    <button class="cabinet-play" id="play-platformer-btn">▸ PLAY</button>
+                </div>
+                <div class="cabinet is-coming" data-game="soon-2">
+                    <div class="cabinet-emoji">⏳</div>
+                    <div class="cabinet-title">COMING SOON</div>
+                    <div class="cabinet-desc">Another cabinet is warming up.</div>
+                    <div class="cabinet-coming">▸ STAY TUNED</div>
+                </div>
+            </div>
+            <footer class="arcade-footer">made by @jayansh · <a href="https://github.com/jayansh" target="_blank" rel="noopener">GitHub</a></footer>
+        </div>
+    </div>
 
+    <div id="main-menu" class="screen hidden">
         <div class="menu-hero">
             <h1>GeoGuesser</h1>
             <p class="tagline">Drop in. Spot the world. Score big.</p>
@@ -260,6 +342,404 @@
         </div>
 
         <footer class="arcade-footer">made by @jayansh · <a href="https://github.com/jayansh" target="_blank" rel="noopener">GitHub</a></footer>
+    </div>
+
+    <!-- Tetris Screen -->
+    <div id="tetris-screen" class="screen hidden">
+        <div class="tetris-wrap">
+            <h2 class="tetris-title">TETRIS</h2>
+            <div class="tetris-layout">
+                <div class="tetris-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">HOLD</div>
+                        <canvas id="tetris-hold" class="tetris-mini-canvas" width="120" height="80"></canvas>
+                    </div>
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">SCORE</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="tetris-score">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">LEVEL</span><span class="val" id="tetris-level">1</span></div>
+                            <div class="tetris-score-row"><span class="lbl">LINES</span><span class="val" id="tetris-lines">0</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-board-frame" id="tetris-board-frame">
+                    <canvas id="tetris-canvas" width="300" height="600"></canvas>
+                    <div class="tetris-overlay hidden" id="tetris-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="tetris-gameover-overlay">
+                        <h2>GAME OVER</h2>
+                        <div class="stat-line" id="tetris-final-stats">SCORE 0 · LV 1 · LINES 0</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="tetris-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="tetris-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">NEXT</div>
+                        <canvas id="tetris-next" class="tetris-mini-canvas" width="120" height="280"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="tetris-touch">
+                <button data-tt="left" title="Left">◀</button>
+                <button data-tt="right" title="Right">▶</button>
+                <button data-tt="rotate" title="Rotate">⟳</button>
+                <button data-tt="hold" title="Hold">⇪</button>
+                <button data-tt="soft" title="Soft drop">▼</button>
+                <button data-tt="hard" title="Hard drop">⤓</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Breakout Screen -->
+    <div id="breakout-screen" class="screen hidden">
+        <div class="tetris-wrap breakout-wrap">
+            <h2 class="tetris-title breakout-title">BREAKOUT</h2>
+            <div class="breakout-layout">
+                <div class="tetris-board-frame breakout-board-frame" id="breakout-board-frame">
+                    <canvas id="breakout-canvas" width="480" height="360"></canvas>
+                    <div class="tetris-overlay hidden" id="breakout-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="breakout-gameover-overlay">
+                        <h2>GAME OVER</h2>
+                        <div class="stat-line" id="breakout-final-stats">SCORE 0 · LEVEL 1</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="breakout-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="breakout-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side breakout-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">SCORE</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="breakout-score">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">LEVEL</span><span class="val" id="breakout-level">1</span></div>
+                            <div class="tetris-score-row"><span class="lbl">LIVES</span><canvas id="breakout-lives" width="120" height="22"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel breakout-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text">
+                            MOUSE / ← → move<br>
+                            SPACE launch<br>
+                            P pause
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="breakout-touch">
+                <button data-bt="left" title="Left">◀</button>
+                <button data-bt="right" title="Right">▶</button>
+                <button data-bt="launch" title="Launch">●</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snake Screen -->
+    <div id="snake-screen" class="screen hidden">
+        <div class="tetris-wrap snake-wrap">
+            <h2 class="tetris-title snake-title">SNAKE</h2>
+            <div class="snake-layout">
+                <div class="tetris-board-frame snake-board-frame" id="snake-board-frame">
+                    <canvas id="snake-canvas" width="504" height="504"></canvas>
+                    <div class="tetris-overlay hidden" id="snake-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="snake-gameover-overlay">
+                        <h2>GAME OVER</h2>
+                        <div class="stat-line" id="snake-final-stats">SCORE 0 · LENGTH 3</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="snake-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="snake-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side snake-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">SCORE</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="snake-score">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">LENGTH</span><span class="val" id="snake-length">3</span></div>
+                            <div class="tetris-score-row"><span class="lbl">BEST</span><span class="val" id="snake-best">0</span></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel snake-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text">
+                            ← → ↑ ↓ / WASD<br>
+                            SWIPE on mobile<br>
+                            P pause
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="snake-touch">
+                <button data-st="up" title="Up">▲</button>
+                <button data-st="left" title="Left">◀</button>
+                <button data-st="down" title="Down">▼</button>
+                <button data-st="right" title="Right">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Space Invaders Screen -->
+    <div id="invaders-screen" class="screen hidden">
+        <div class="tetris-wrap invaders-wrap">
+            <h2 class="tetris-title invaders-title">SPACE INVADERS</h2>
+            <div class="invaders-layout">
+                <div class="tetris-board-frame invaders-board-frame" id="invaders-board-frame">
+                    <canvas id="invaders-canvas" width="560" height="560"></canvas>
+                    <div class="tetris-overlay hidden" id="invaders-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="invaders-gameover-overlay">
+                        <h2>GAME OVER</h2>
+                        <div class="stat-line" id="invaders-final-stats">SCORE 0 · WAVE 1</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="invaders-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="invaders-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side invaders-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">STATUS</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="invaders-score">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">HI-SCORE</span><span class="val" id="invaders-hi">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">WAVE</span><span class="val" id="invaders-wave">1</span></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel snake-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text">
+                            ← → / A D or MOUSE move<br>
+                            HOLD click / SPACE fire<br>
+                            P pause
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="invaders-touch">
+                <button data-it="left" title="Left">◀</button>
+                <button data-it="fire" title="Fire">FIRE</button>
+                <button data-it="right" title="Right">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="asteroids-screen" class="screen hidden">
+        <div class="tetris-wrap asteroids-wrap">
+            <h2 class="tetris-title asteroids-title">ASTEROIDS</h2>
+            <div class="asteroids-layout">
+                <div class="tetris-board-frame asteroids-board-frame" id="asteroids-board-frame">
+                    <canvas id="asteroids-canvas" width="600" height="480"></canvas>
+                    <div class="tetris-overlay hidden" id="asteroids-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="asteroids-gameover-overlay">
+                        <h2>GAME OVER</h2>
+                        <div class="stat-line" id="asteroids-final-stats">SCORE 0 · WAVE 1</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="asteroids-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="asteroids-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side asteroids-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">STATUS</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="asteroids-score">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">HI-SCORE</span><span class="val" id="asteroids-hi">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">WAVE</span><span class="val" id="asteroids-wave">1</span></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel snake-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text">
+                            ← → / A D rotate<br>
+                            ↑ / W thrust · SPACE fire<br>
+                            P pause
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="asteroids-touch">
+                <button data-at="rotleft" title="Rotate Left">↺</button>
+                <button data-at="thrust" title="Thrust">▲</button>
+                <button data-at="fire" title="Fire">FIRE</button>
+                <button data-at="rotright" title="Rotate Right">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Glow Runner Level Select -->
+    <div id="platformer-select-screen" class="screen hidden">
+        <div class="pong-select-wrap platformer-select-wrap">
+            <h2 class="tetris-title platformer-title">GLOW RUNNER</h2>
+            <div class="hub-prompt">▸ SELECT A LEVEL</div>
+            <div class="platformer-level-grid" id="platformer-level-grid"></div>
+            <button class="cabinet-play pong-back-btn" id="platformer-select-back-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+        </div>
+    </div>
+
+    <!-- Glow Runner Game -->
+    <div id="platformer-screen" class="screen hidden">
+        <div class="tetris-wrap platformer-wrap">
+            <h2 class="tetris-title platformer-title" id="platformer-screen-title">GLOW RUNNER</h2>
+            <div class="asteroids-layout platformer-layout">
+                <div class="tetris-board-frame platformer-board-frame" id="platformer-board-frame">
+                    <canvas id="platformer-canvas" width="800" height="480"></canvas>
+                    <div class="tetris-overlay hidden" id="platformer-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume · R to restart level</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="platformer-clear-overlay">
+                        <h2 id="platformer-clear-title">LEVEL CLEAR!</h2>
+                        <div class="stat-line" id="platformer-clear-stats"></div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="platformer-next-btn">NEXT ▸</button>
+                            <button class="cabinet-play" id="platformer-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="platformer-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side platformer-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">RUN</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">LEVEL</span><span class="val" id="platformer-level-val">1</span></div>
+                            <div class="tetris-score-row"><span class="lbl">TIME</span><span class="val" id="platformer-time-val">0.0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">COINS</span><span class="val" id="platformer-coins-val">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">HEARTS</span><span class="val" id="platformer-hearts-val">3</span></div>
+                            <div class="tetris-score-row"><span class="lbl">BEST</span><span class="val" id="platformer-best-val">—</span></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel snake-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text">
+                            ← → / A D run<br>
+                            SPACE / W / ↑ jump<br>
+                            P pause
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tetris-touch" id="platformer-touch">
+                <button data-at="left" title="Left">◀</button>
+                <button data-at="jump" title="Jump">JUMP</button>
+                <button data-at="right" title="Right">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pong Mode Select -->
+    <div id="pong-mode-screen" class="screen hidden">
+        <div class="pong-select-wrap">
+            <h2 class="tetris-title pong-title">PONG</h2>
+            <div class="hub-prompt">▸ SELECT A MODE</div>
+            <div class="pong-mode-grid">
+                <button class="cabinet-play pong-mode-btn" id="pong-mode-cpu-btn">🤖 VS CPU</button>
+                <button class="cabinet-play pong-mode-btn" id="pong-mode-local-btn">👥 LOCAL 2P</button>
+                <button class="cabinet-play pong-mode-btn" id="pong-mode-online-btn">🌐 ONLINE</button>
+            </div>
+            <button class="cabinet-play pong-back-btn" id="pong-mode-back-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+        </div>
+    </div>
+
+    <!-- Pong Difficulty (VS CPU) -->
+    <div id="pong-difficulty-screen" class="screen hidden">
+        <div class="pong-select-wrap">
+            <h2 class="tetris-title pong-title">VS CPU</h2>
+            <div class="hub-prompt">▸ SELECT DIFFICULTY</div>
+            <div class="pong-mode-grid">
+                <button class="cabinet-play pong-mode-btn" id="pong-diff-easy" style="background:var(--cyan);border-color:#2a9bb8;box-shadow:var(--press-shadow-sm),var(--glow-cyan)">😊 EASY</button>
+                <button class="cabinet-play pong-mode-btn" id="pong-diff-normal" style="background:var(--gold);border-color:#b88a1e;box-shadow:var(--press-shadow-sm),var(--glow-gold)">😎 NORMAL</button>
+                <button class="cabinet-play pong-mode-btn" id="pong-diff-hard" style="background:var(--pink);border-color:#b21d49;box-shadow:var(--press-shadow-sm),var(--glow-pink)">😈 HARD</button>
+            </div>
+            <button class="cabinet-play pong-back-btn" id="pong-diff-back-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ BACK</button>
+        </div>
+    </div>
+
+    <!-- Pong Online Lobby -->
+    <div id="pong-online-screen" class="screen hidden">
+        <div class="pong-select-wrap">
+            <h2 class="tetris-title pong-title">ONLINE PONG</h2>
+            <div class="pong-online-grid">
+                <div class="tetris-panel pong-online-panel">
+                    <div class="tetris-panel-label">CREATE GAME</div>
+                    <p class="pong-online-text">Start a room and share the code.</p>
+                    <button class="cabinet-play" id="pong-create-btn">CREATE GAME</button>
+                </div>
+                <div class="tetris-panel pong-online-panel">
+                    <div class="tetris-panel-label">JOIN</div>
+                    <p class="pong-online-text">Enter a friend's 6-character code.</p>
+                    <input id="pong-join-code-input" class="auth-input" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false" />
+                    <button class="cabinet-play" id="pong-join-btn" style="background:var(--cyan);border-color:#2a9bb8;box-shadow:var(--press-shadow-sm),var(--glow-cyan)">JOIN GAME</button>
+                </div>
+            </div>
+            <div class="pong-waiting hidden" id="pong-waiting">
+                <div class="room-code" id="pong-room-code-display">------</div>
+                <button id="pong-copy-btn" class="btn btn-small">📋 Copy Code</button>
+                <div class="spinner"></div>
+                <p id="pong-online-status">Waiting for opponent to join…</p>
+            </div>
+            <button class="cabinet-play pong-back-btn" id="pong-online-back-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ BACK</button>
+        </div>
+    </div>
+
+    <!-- Pong Game -->
+    <div id="pong-screen" class="screen hidden">
+        <div class="tetris-wrap pong-wrap">
+            <h2 class="tetris-title pong-title" id="pong-mode-title">PONG</h2>
+            <div class="pong-layout">
+                <div class="tetris-board-frame pong-board-frame" id="pong-board-frame">
+                    <canvas id="pong-canvas" width="800" height="450"></canvas>
+                    <div class="tetris-overlay hidden" id="pong-pause-overlay">
+                        <h2>PAUSED</h2>
+                        <div class="stat-line">press P to resume</div>
+                    </div>
+                    <div class="tetris-overlay hidden" id="pong-gameover-overlay">
+                        <h2 id="pong-winner-banner">LEFT WINS!</h2>
+                        <div class="stat-line" id="pong-final-stats">LEFT WINS · 0 – 0</div>
+                        <div class="tetris-overlay-actions">
+                            <button class="cabinet-play" id="pong-retry-btn">REMATCH</button>
+                            <button class="cabinet-play" id="pong-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tetris-side pong-side">
+                    <div class="tetris-panel">
+                        <div class="tetris-panel-label">STATUS</div>
+                        <div class="tetris-score-list">
+                            <div class="tetris-score-row"><span class="lbl">SCORE</span><span class="val" id="pong-score">0 – 0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">RALLY</span><span class="val" id="pong-rally">0</span></div>
+                            <div class="tetris-score-row"><span class="lbl">BEST</span><span class="val" id="pong-best">0</span></div>
+                        </div>
+                    </div>
+                    <div class="tetris-panel snake-help">
+                        <div class="tetris-panel-label">CONTROLS</div>
+                        <div class="breakout-help-text" id="pong-controls-help">
+                            W/S or ↑/↓ move<br>
+                            MOUSE follows<br>
+                            P pause · first to 7
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Waiting Room Screen -->

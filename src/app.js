@@ -16,6 +16,7 @@ import { multiplayerService } from './services/multiplayer.js';
 import { matchmakingService } from './services/matchmaking.js';
 import { GameController } from './game/controller.js';
 import { UIController } from './ui/controller.js';
+import { applyArcadeName } from './arcade.js';
 
 let gameController;
 let uiController;
@@ -42,6 +43,9 @@ function firebaseConfigured() {
 export function initUI() {
   gameController = new GameController();
   window.gameController = gameController;
+
+  // Fill the hub hero title from the single ARCADE_NAME constant.
+  applyArcadeName();
 
   // Auth is async (onAuthStateChanged), but we don't need to await it.
   authService.initialize();

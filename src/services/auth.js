@@ -351,14 +351,19 @@ class AuthService {
   updateUI() {
     const authSection = document.getElementById('auth-section');
     const mainMenu = document.getElementById('main-menu');
-    const changeNameBtn = document.getElementById('change-name-btn');
+    const arcadeHub = document.getElementById('arcade-hub');
+    const appHeader = document.getElementById('app-header');
     const signOutBtn = document.getElementById('signout-btn');
     const friendsBtn = document.getElementById('friends-btn');
     const userEmailEl = document.getElementById('user-email');
 
     if (this.user) {
       authSection.classList.add('hidden');
-      mainMenu.classList.remove('hidden');
+      // The arcade hub is now the post-login homepage; the GeoGuesser region
+      // menu (main-menu) is one level deeper, reached via the cabinet.
+      mainMenu.classList.add('hidden');
+      arcadeHub?.classList.remove('hidden');
+      appHeader?.classList.remove('hidden');
 
       if (this.user.username) {
         document.getElementById('user-name').textContent = `${this.user.displayName} (@${this.user.username})`;
@@ -367,12 +372,10 @@ class AuthService {
       }
 
       if (this.user.isAnonymous) {
-        changeNameBtn?.classList.remove('hidden');
         signOutBtn?.classList.add('hidden');
         friendsBtn?.classList.add('hidden');
         userEmailEl?.classList.add('hidden');
       } else {
-        changeNameBtn?.classList.add('hidden');
         signOutBtn?.classList.remove('hidden');
         friendsBtn?.classList.remove('hidden');
         if (this.user.email) {
@@ -382,9 +385,15 @@ class AuthService {
           userEmailEl?.classList.add('hidden');
         }
       }
+      // Refresh cabinet high-score lines from localStorage.
+      if (typeof window.uiController?.renderCabinetScores === 'function') {
+        window.uiController.renderCabinetScores();
+      }
     } else {
       authSection.classList.remove('hidden');
       mainMenu.classList.add('hidden');
+      arcadeHub?.classList.add('hidden');
+      appHeader?.classList.add('hidden');
     }
   }
 
@@ -519,9 +528,14 @@ class AuthService {
 
   async getLeaderboard(mode = 'all', limitCount = 10) {
     try {
+      // Filter + sort on the SAME field (bestScore). Firestore requires the
+      // first orderBy to match the inequality field; the previous
+      // `where('totalGames','>',0)` + `orderBy('bestScore','desc')` violated
+      // that and threw on every call, so the Top Scores board was always empty.
+      // bestScore > 0 also excludes anyone who hasn't scored yet.
       const q = query(
         collection(this.db, 'users'),
-        where('totalGames', '>', 0),
+        where('bestScore', '>', 0),
         orderBy('bestScore', 'desc'),
         limit(limitCount)
       );

@@ -10,6 +10,14 @@ import { arcadeFX } from '../game/arcade.js';
 import { musicPlayer } from '../game/music.js';
 import { ACHIEVEMENTS, ALL_MODES, availablePins, pinEmoji } from '../game/achievements.js';
 import { ARCADE_MAP_STYLE } from '../game/mapStyle.js';
+import { Tetris, getTetrisHighScore } from '../game/tetris.js';
+import { Breakout, getBreakoutHighScore } from '../game/breakout.js';
+import { Snake, getSnakeHighScore } from '../game/snake.js';
+import { Invaders, getInvadersHighScore } from '../game/invaders.js';
+import { Asteroids, getAsteroidsHighScore } from '../game/asteroids.js';
+import { Pong, getPongHighScore } from '../game/pong.js';
+import { pongNetService } from '../services/pongNet.js';
+import { Platformer, getPlatformerProgress, LEVELS as PLATFORMER_LEVELS, getBest as platformerBest, getCoins as platformerCoins, getUnlocked as platformerUnlocked, GAME_NAME as PLATFORMER_NAME } from '../game/platformer.js';
 
 class UIController {
   constructor(auth, multiplayer, friends) {
@@ -21,6 +29,17 @@ class UIController {
     this.pendingInviteFriendId = null; // set when inviting a friend (vs. creating a normal room)
     this.multiplayerGameStarted = false;
     this.currentInvite = null;
+    this.tetris = null;
+    this.breakout = null;
+    this.snake = null;
+    this.invaders = null;
+    this.asteroids = null;
+    this.pong = null;
+    this.pongMode = 'cpu';
+    this.pongDifficulty = 'normal';
+    this.pongNetStarted = false;
+    this.platformer = null;
+    this.platformerLevel = 0;
     this.setupEventListeners();
     this.setupFriendsListeners();
   }
@@ -59,7 +78,7 @@ class UIController {
     document.getElementById('player-name-input').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.handleStartPlaying();
     });
-    document.getElementById('change-name-btn').addEventListener('click', () => this.handleChangeName());
+    document.getElementById('change-name-btn')?.addEventListener('click', () => this.handleChangeName());
 
     // Solo mode buttons
     document.getElementById('solo-world-btn').addEventListener('click', () => this.showTimeSelection('world', false));
@@ -122,6 +141,91 @@ class UIController {
     // Game controls
     document.getElementById('play-again-btn').addEventListener('click', () => this.backToMenu());
     document.getElementById('opponent-left-ok-btn')?.addEventListener('click', () => this.backToMenu());
+
+    // Arcade hub cabinets
+    document.getElementById('play-geoguesser-btn')?.addEventListener('click', () => this.showScreen('main-menu'));
+    document.getElementById('play-tetris-btn')?.addEventListener('click', () => this.showScreen('tetris-screen'));
+    document.getElementById('play-breakout-btn')?.addEventListener('click', () => this.showScreen('breakout-screen'));
+    document.getElementById('play-snake-btn')?.addEventListener('click', () => this.showScreen('snake-screen'));
+    document.getElementById('play-invaders-btn')?.addEventListener('click', () => this.showScreen('invaders-screen'));
+    document.getElementById('play-asteroids-btn')?.addEventListener('click', () => this.showScreen('asteroids-screen'));
+    // ◂ ARCADE back-link in the persistent header → hub.
+    document.getElementById('back-to-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+
+    // Tetris overlay + touch controls
+    document.getElementById('tetris-retry-btn')?.addEventListener('click', () => this.tetris?.retry());
+    document.getElementById('tetris-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('tetris-pause-overlay')?.addEventListener('click', () => this.tetris?.togglePause());
+    document.querySelectorAll('#tetris-touch [data-tt]').forEach((btn) => {
+      btn.addEventListener('click', () => this.tetrisTouch(btn.dataset.tt));
+    });
+
+    // Breakout overlay + touch controls
+    document.getElementById('breakout-retry-btn')?.addEventListener('click', () => this.breakout?.retry());
+    document.getElementById('breakout-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('breakout-pause-overlay')?.addEventListener('click', () => this.breakout?.togglePause());
+    document.querySelectorAll('#breakout-touch [data-bt]').forEach((btn) => {
+      btn.addEventListener('click', () => this.breakoutTouch(btn.dataset.bt));
+    });
+
+    // Snake overlay + touch controls
+    document.getElementById('snake-retry-btn')?.addEventListener('click', () => this.snake?.retry());
+    document.getElementById('snake-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('snake-pause-overlay')?.addEventListener('click', () => this.snake?.togglePause());
+    document.querySelectorAll('#snake-touch [data-st]').forEach((btn) => {
+      btn.addEventListener('click', () => this.snakeTouch(btn.dataset.st));
+    });
+
+    // Invaders overlay + touch controls
+    document.getElementById('invaders-retry-btn')?.addEventListener('click', () => this.invaders?.retry());
+    document.getElementById('invaders-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('invaders-pause-overlay')?.addEventListener('click', () => this.invaders?.togglePause());
+    document.querySelectorAll('#invaders-touch [data-it]').forEach((btn) => {
+      btn.addEventListener('click', () => this.invadersTouch(btn.dataset.it));
+    });
+
+    // Asteroids overlay controls. Touch buttons are bound inside the game
+    // (pointerdown/up) for hold-to-thrust/rotate/fire support — no click wiring here.
+    document.getElementById('asteroids-retry-btn')?.addEventListener('click', () => this.asteroids?.retry());
+    document.getElementById('asteroids-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('asteroids-pause-overlay')?.addEventListener('click', () => this.asteroids?.togglePause());
+
+    // Glow Runner cabinet → level select; overlay + select controls. Touch
+    // buttons are bound inside the game (pointerdown/up) for hold-to-run/jump.
+    document.getElementById('play-platformer-btn')?.addEventListener('click', () => this.showScreen('platformer-select-screen'));
+    document.getElementById('platformer-select-back-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('platformer-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('platformer-retry-btn')?.addEventListener('click', () => this.platformer?.retry());
+    document.getElementById('platformer-pause-overlay')?.addEventListener('click', () => this.platformer?.togglePause());
+    document.getElementById('platformer-next-btn')?.addEventListener('click', () => {
+      if (this.platformerLevel + 1 < PLATFORMER_LEVELS.length) this.startPlatformer(this.platformerLevel + 1);
+      else this.showScreen('platformer-select-screen');
+    });
+
+    // Pong cabinet → mode select.
+    document.getElementById('play-pong-btn')?.addEventListener('click', () => this.showScreen('pong-mode-screen'));
+    // Mode select → difficulty / local / online.
+    document.getElementById('pong-mode-cpu-btn')?.addEventListener('click', () => this.showScreen('pong-difficulty-screen'));
+    document.getElementById('pong-mode-local-btn')?.addEventListener('click', () => this.startPong('local'));
+    document.getElementById('pong-mode-online-btn')?.addEventListener('click', () => this.showScreen('pong-online-screen'));
+    document.getElementById('pong-mode-back-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    // Difficulty → start VS CPU.
+    document.getElementById('pong-diff-easy')?.addEventListener('click', () => this.startPong('cpu', 'easy'));
+    document.getElementById('pong-diff-normal')?.addEventListener('click', () => this.startPong('cpu', 'normal'));
+    document.getElementById('pong-diff-hard')?.addEventListener('click', () => this.startPong('cpu', 'hard'));
+    document.getElementById('pong-diff-back-btn')?.addEventListener('click', () => this.showScreen('pong-mode-screen'));
+    // Online lobby: create / join / copy / back.
+    document.getElementById('pong-create-btn')?.addEventListener('click', () => this.pongCreateRoom());
+    document.getElementById('pong-join-btn')?.addEventListener('click', () => this.pongJoinRoom());
+    document.getElementById('pong-online-back-btn')?.addEventListener('click', () => this.pongOnlineBack());
+    document.getElementById('pong-copy-btn')?.addEventListener('click', () => this.pongCopyCode());
+    document.getElementById('pong-join-code-input')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.pongJoinRoom();
+    });
+    // Pong game overlays.
+    document.getElementById('pong-retry-btn')?.addEventListener('click', () => this.pongRematch());
+    document.getElementById('pong-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('pong-pause-overlay')?.addEventListener('click', () => this.pong?.togglePause());
 
     // In-game chat
     document.getElementById('chat-toggle-btn')?.addEventListener('click', () => this.toggleChat());
@@ -1044,6 +1148,563 @@ class UIController {
   showScreen(screenId) {
     document.querySelectorAll('.screen').forEach((screen) => screen.classList.add('hidden'));
     document.getElementById(screenId).classList.remove('hidden');
+
+    // Persistent navbar: hidden on auth + in-game (which have their own chrome);
+    // shown everywhere else. The ◂ ARCADE back-link is shown on every game page
+    // except the hub itself (hub is the arcade root).
+    const appHeader = document.getElementById('app-header');
+    const backBtn = document.getElementById('back-to-arcade-btn');
+    if (screenId === 'auth-section' || screenId === 'game-screen') {
+      appHeader?.classList.add('hidden');
+    } else {
+      appHeader?.classList.remove('hidden');
+    }
+    if (screenId === 'arcade-hub') {
+      backBtn?.classList.add('hidden');
+      this.renderCabinetScores();
+    } else {
+      backBtn?.classList.remove('hidden');
+    }
+
+    // Tetris lifecycle: start when entering its screen, stop when leaving so
+    // its rAF loop + keyboard listeners don't run in the background.
+    if (screenId === 'tetris-screen') {
+      this.startTetris();
+    } else if (this.tetris) {
+      this.stopTetris();
+    }
+    if (screenId === 'breakout-screen') {
+      this.startBreakout();
+    } else if (this.breakout) {
+      this.stopBreakout();
+    }
+    if (screenId === 'snake-screen') {
+      this.startSnake();
+    } else if (this.snake) {
+      this.stopSnake();
+    }
+    if (screenId === 'invaders-screen') {
+      this.startInvaders();
+    } else if (this.invaders) {
+      this.stopInvaders();
+    }
+    if (screenId === 'asteroids-screen') {
+      this.startAsteroids();
+    } else if (this.asteroids) {
+      this.stopAsteroids();
+    }
+    // Glow Runner: the game runs only on platformer-screen. The level-select
+    // screen renders the level cards; picking one calls startPlatformer() which
+    // navigates here. Leaving stops the loop. The select screen is cheap to
+    // re-render each time we enter it (best time / coins may have changed).
+    if (screenId === 'platformer-select-screen') {
+      this.renderPlatformerSelect();
+    }
+    if (screenId === 'platformer-screen') {
+      if (!this.platformer || !this.platformer.running) this.showScreen('platformer-select-screen');
+    } else if (this.platformer) {
+      this.stopPlatformer();
+    }
+    // Pong: only pong-screen runs the game. startPong() is invoked by the
+    // mode/difficulty/online flows, which then navigate here; leaving the
+    // screen stops the loop and tears down the net listener (unless we're
+    // still in the online lobby waiting for an opponent).
+    if (screenId === 'pong-screen') {
+      if (!this.pong || !this.pong.running) this.showScreen('pong-mode-screen');
+    } else if (this.pong) {
+      this.stopPong();
+      if (screenId !== 'pong-online-screen' && this.pongNetStarted) this.pongOnlineCleanup();
+    }
+  }
+
+  // ---- Arcade hub ----
+  renderCabinetScores() {
+    // GeoGuesser high score from the logged-in user's Firestore bestScore (if
+    // loaded) else the stored guest aggregate; Tetris from localStorage.
+    const gg = this.auth?.user?.bestScore;
+    const ggEl = document.getElementById('hs-geoguesser');
+    if (ggEl) ggEl.textContent = `HIGH SCORE: ${gg ? gg.toLocaleString() : '—'}`;
+    const tEl = document.getElementById('hs-tetris');
+    if (tEl) tEl.textContent = `HIGH SCORE: ${getTetrisHighScore().toLocaleString()}`;
+    const bEl = document.getElementById('hs-breakout');
+    if (bEl) bEl.textContent = `HIGH SCORE: ${getBreakoutHighScore().toLocaleString()}`;
+    const sEl = document.getElementById('hs-snake');
+    if (sEl) sEl.textContent = `HIGH SCORE: ${getSnakeHighScore().toLocaleString()}`;
+    const iEl = document.getElementById('hs-invaders');
+    if (iEl) iEl.textContent = `HIGH SCORE: ${getInvadersHighScore().toLocaleString()}`;
+    const aEl = document.getElementById('hs-asteroids');
+    if (aEl) aEl.textContent = `HIGH SCORE: ${getAsteroidsHighScore().toLocaleString()}`;
+    const pEl = document.getElementById('hs-pong');
+    if (pEl) pEl.textContent = `BEST RALLY: ${getPongHighScore().toLocaleString()}`;
+    const fEl = document.getElementById('hs-platformer');
+    if (fEl) fEl.textContent = `CLEARED: ${getPlatformerProgress()}/${PLATFORMER_LEVELS.length}`;
+  }
+
+  startTetris() {
+    const canvas = document.getElementById('tetris-canvas');
+    const next = document.getElementById('tetris-next');
+    const hold = document.getElementById('tetris-hold');
+    const frame = document.getElementById('tetris-board-frame');
+    if (!canvas) return;
+    if (!this.tetris) {
+      this.tetris = new Tetris({
+        canvas, nextCanvas: next, holdCanvas: hold, boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      // Re-bind canvas refs in case the screen was re-shown after a tab away.
+      this.tetris.canvas = canvas;
+      this.tetris.nextCanvas = next;
+      this.tetris.holdCanvas = hold;
+      this.tetris.boardFrame = frame;
+      this.tetris.ctx = canvas.getContext('2d');
+      this.tetris.nextCtx = next?.getContext('2d');
+      this.tetris.holdCtx = hold?.getContext('2d');
+    }
+    this.tetris.start();
+  }
+
+  stopTetris() {
+    this.tetris?.stop();
+  }
+
+  // Mobile touch controls → Tetris actions.
+  tetrisTouch(kind) {
+    const t = this.tetris;
+    if (!t || t.over) return;
+    if (kind === 'left') t.move(-1, 0);
+    else if (kind === 'right') t.move(1, 0);
+    else if (kind === 'soft') t.softDrop();
+    else if (kind === 'hard') t.hardDrop();
+    else if (kind === 'rotate') t.rotate(1);
+    else if (kind === 'hold') t.hold_();
+  }
+
+  startBreakout() {
+    const canvas = document.getElementById('breakout-canvas');
+    const lives = document.getElementById('breakout-lives');
+    const frame = document.getElementById('breakout-board-frame');
+    if (!canvas) return;
+    if (!this.breakout) {
+      this.breakout = new Breakout({
+        canvas, livesCanvas: lives, boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      this.breakout.canvas = canvas;
+      this.breakout.livesCanvas = lives;
+      this.breakout.boardFrame = frame;
+      this.breakout.ctx = canvas.getContext('2d');
+      this.breakout.livesCtx = lives?.getContext('2d');
+    }
+    this.breakout.start();
+  }
+
+  stopBreakout() {
+    this.breakout?.stop();
+  }
+
+  // Mobile touch controls → Breakout actions.
+  breakoutTouch(kind) {
+    const b = this.breakout;
+    if (!b || b.over) return;
+    // movePaddle() clamps paddleTarget to the walls next frame, so a bare
+    // nudge here is enough — no need to know the playfield width.
+    if (kind === 'left') b.paddleTarget -= 40;
+    else if (kind === 'right') b.paddleTarget += 40;
+    else if (kind === 'launch') b.launch();
+  }
+
+  startSnake() {
+    const canvas = document.getElementById('snake-canvas');
+    const frame = document.getElementById('snake-board-frame');
+    if (!this.snake) {
+      this.snake = new Snake({
+        canvas,
+        boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      this.snake.canvas = canvas;
+      this.snake.boardFrame = frame;
+      this.snake.ctx = canvas?.getContext('2d');
+    }
+    this.snake.start();
+  }
+
+  stopSnake() {
+    this.snake?.stop();
+  }
+
+  // Mobile d-pad → queue a turn (same buffer as keyboard, with reversal guard).
+  snakeTouch(kind) {
+    this.snake?.queueInput(kind);
+  }
+
+  startInvaders() {
+    const canvas = document.getElementById('invaders-canvas');
+    const frame = document.getElementById('invaders-board-frame');
+    if (!this.invaders) {
+      this.invaders = new Invaders({
+        canvas,
+        boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      this.invaders.canvas = canvas;
+      this.invaders.boardFrame = frame;
+      this.invaders.ctx = canvas?.getContext('2d');
+    }
+    this.invaders.start();
+  }
+
+  stopInvaders() {
+    this.invaders?.stop();
+  }
+
+  // Mobile touch: left/right tap-nudge the cannon, fire shoots (1-bullet cap
+  // is enforced inside Invaders.shoot).
+  invadersTouch(kind) {
+    const iv = this.invaders;
+    if (!iv) return;
+    if (kind === 'left') iv.nudge(-28);
+    else if (kind === 'right') iv.nudge(28);
+    else if (kind === 'fire') iv.shoot();
+  }
+
+  startAsteroids() {
+    const canvas = document.getElementById('asteroids-canvas');
+    const frame = document.getElementById('asteroids-board-frame');
+    if (!this.asteroids) {
+      this.asteroids = new Asteroids({
+        canvas,
+        boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      this.asteroids.canvas = canvas;
+      this.asteroids.boardFrame = frame;
+      this.asteroids.ctx = canvas?.getContext('2d');
+    }
+    this.asteroids.start();
+  }
+
+  stopAsteroids() {
+    this.asteroids?.stop();
+  }
+
+  // ---- Glow Runner (neon platformer) ----
+  renderPlatformerSelect() {
+    const grid = document.getElementById('platformer-level-grid');
+    if (!grid) return;
+    const unlocked = platformerUnlocked();
+    grid.innerHTML = '';
+    PLATFORMER_LEVELS.forEach((L, i) => {
+      const isLocked = i > unlocked;
+      const best = platformerBest(i);
+      const coins = platformerCoins(i);
+      const card = document.createElement('button');
+      card.className = 'platformer-level-card' + (isLocked ? ' is-locked' : '');
+      card.disabled = isLocked;
+      card.innerHTML = `<div class="pl-name">${isLocked ? '🔒' : '▶'} LEVEL ${i + 1}</div>` +
+        (isLocked
+          ? `<div class="pl-lock">🔒 Clear Level ${i} to unlock</div>`
+          : `<div class="pl-meta">BEST: ${best ? (best / 1000).toFixed(1) + 's' : '—'} · COINS: ${coins}/${L.coins.length}</div>`);
+      if (!isLocked) card.addEventListener('click', () => this.startPlatformer(i));
+      grid.appendChild(card);
+    });
+  }
+
+  startPlatformer(idx) {
+    this.platformerLevel = idx;
+    const canvas = document.getElementById('platformer-canvas');
+    const frame = document.getElementById('platformer-board-frame');
+    document.getElementById('platformer-screen-title').textContent = PLATFORMER_NAME;
+    document.getElementById('platformer-best-val').textContent = platformerBest(idx) ? (platformerBest(idx) / 1000).toFixed(1) + 's' : '—';
+    if (!this.platformer) {
+      this.platformer = new Platformer({
+        canvas, boardFrame: frame,
+        onClear: (r) => this._onPlatformerClear(r),
+        onStatus: (s) => this._onPlatformerStatus(s),
+      });
+    } else {
+      this.platformer.canvas = canvas;
+      this.platformer.boardFrame = frame;
+      this.platformer.ctx = canvas?.getContext('2d');
+    }
+    this.platformer.levelIdx = idx;
+    this.platformer.reset();
+    this.platformer.start();                 // running=true BEFORE we navigate, like Pong
+    this._platformerHideOverlays();
+    this.showScreen('platformer-screen');
+  }
+
+  stopPlatformer() {
+    this.platformer?.stop();
+  }
+
+  _platformerHideOverlays() {
+    document.getElementById('platformer-pause-overlay')?.classList.add('hidden');
+    document.getElementById('platformer-clear-overlay')?.classList.add('hidden');
+  }
+
+  _onPlatformerStatus(s) {
+    if (s.state === 'paused') document.getElementById('platformer-pause-overlay')?.classList.remove('hidden');
+    else if (s.state === 'playing') document.getElementById('platformer-pause-overlay')?.classList.add('hidden');
+    document.getElementById('platformer-level-val').textContent = String(s.level + 1);
+    document.getElementById('platformer-time-val').textContent = s.time.toFixed(1);
+    document.getElementById('platformer-coins-val').textContent = `${s.coins}/${s.totalCoins}`;
+    document.getElementById('platformer-hearts-val').textContent = '♥'.repeat(s.hearts) || '0';
+  }
+
+  _onPlatformerClear(r) {
+    this.renderCabinetScores();
+    document.getElementById('platformer-pause-overlay')?.classList.add('hidden');
+    const ov = document.getElementById('platformer-clear-overlay');
+    const title = document.getElementById('platformer-clear-title');
+    title.textContent = r.isBest ? 'NEW BEST!' : 'LEVEL CLEAR!';
+    title.style.color = r.isBest ? 'var(--gold)' : 'var(--green)';
+    document.getElementById('platformer-clear-stats').textContent =
+      `TIME ${(r.time / 1000).toFixed(1)}s · COINS ${r.coins}/${r.totalCoins} · ♥ ${r.hearts}`;
+    document.getElementById('platformer-next-btn').textContent = r.hasNext ? 'NEXT ▸' : '◂ SELECT';
+    document.getElementById('platformer-next-btn').style.background = r.hasNext ? 'var(--pink)' : 'var(--blue)';
+    ov?.classList.remove('hidden');
+  }
+
+  // ---- Pong ----
+  startPong(mode, difficulty) {
+    this.pongMode = mode || 'cpu';
+    this.pongDifficulty = difficulty || 'normal';
+    const canvas = document.getElementById('pong-canvas');
+    const frame = document.getElementById('pong-board-frame');
+    const title = document.getElementById('pong-mode-title');
+    const help = document.getElementById('pong-controls-help');
+    if (title) {
+      title.textContent = mode === 'local' ? 'LOCAL 2P' : mode === 'online' ? 'ONLINE PONG' : `VS CPU · ${difficulty.toUpperCase()}`;
+    }
+    if (help) {
+      help.innerHTML = mode === 'local'
+        ? 'W/S = LEFT paddle<br>↑/↓ = RIGHT paddle<br>MOUSE = left · P pause'
+        : 'W/S or ↑/↓ move<br>MOUSE follows<br>P pause · first to 7';
+    }
+    this.stopPong();
+    this.pong = new Pong({
+      canvas,
+      boardFrame: frame,
+      mode: this.pongMode,
+      difficulty: this.pongDifficulty,
+      onHighScore: () => this.renderCabinetScores(),
+    });
+    this.pong.start();
+    this.showScreen('pong-screen');
+  }
+
+  stopPong() {
+    this.pong?.stop();
+  }
+
+  // Online: create a room, show the code, wait for a guest to join (the
+  // onSnapshot listener flips us into the game once a second player arrives).
+  async pongCreateRoom() {
+    if (!authService.user) {
+      alert('Sign in to play online.');
+      return;
+    }
+    document.getElementById('pong-waiting')?.classList.remove('hidden');
+    const status = document.getElementById('pong-online-status');
+    if (status) status.textContent = 'Creating room…';
+    try {
+      const code = await pongNetService.createRoom();
+      if (!code) throw new Error('create failed');
+      document.getElementById('pong-room-code-display').textContent = code;
+      if (status) status.textContent = 'Waiting for opponent to join…';
+      this.pongNetStarted = true;
+      this._pongWaitingForGuest = true;
+      pongNetService.onUpdate = (data) => this._onPongRoomUpdate(data);
+    } catch (e) {
+      console.error('pong create', e);
+      alert('Failed to create room. Try again.');
+      document.getElementById('pong-waiting')?.classList.add('hidden');
+    }
+  }
+
+  async pongJoinRoom() {
+    if (!authService.user) {
+      alert('Sign in to play online.');
+      return;
+    }
+    const input = document.getElementById('pong-join-code-input');
+    const code = (input?.value || '').trim();
+    if (!code) { alert('Please enter a room code'); return; }
+    document.getElementById('pong-waiting')?.classList.remove('hidden');
+    const status = document.getElementById('pong-online-status');
+    if (status) status.textContent = 'Joining…';
+    try {
+      const res = await pongNetService.joinRoom(code);
+      if (!res.success) { alert(res.error); document.getElementById('pong-waiting')?.classList.add('hidden'); return; }
+      this.pongNetStarted = true;
+      this._pongWaitingForGuest = false;
+      pongNetService.onUpdate = (data) => this._onPongRoomUpdate(data);
+      if (status) status.textContent = 'Waiting for host to start…';
+    } catch (e) {
+      console.error('pong join', e);
+      alert('Failed to join room. Try again.');
+      document.getElementById('pong-waiting')?.classList.add('hidden');
+    }
+  }
+
+  pongCopyCode() {
+    const code = document.getElementById('pong-room-code-display').textContent;
+    navigator.clipboard?.writeText(code).then(() => {
+      const btn = document.getElementById('pong-copy-btn');
+      if (btn) { btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = '📋 Copy Code'; }, 2000); }
+    }).catch(() => alert('Room code: ' + code));
+  }
+
+  pongOnlineBack() {
+    this.pongOnlineCleanup();
+    this.showScreen('pong-mode-screen');
+  }
+
+  pongOnlineCleanup() {
+    if (!this.pongNetStarted) return;
+    this.pongNetStarted = false;
+    this._pongWaitingForGuest = false;
+    this._pongGameStarted = false;
+    pongNetService.onUpdate = null;
+    pongNetService.leave();
+    document.getElementById('pong-waiting')?.classList.add('hidden');
+  }
+
+  // Single realtime dispatcher for the pong room doc (mirrors the
+  // multiplayerGameUpdate pattern for GeoGuesser rooms).
+  _onPongRoomUpdate(data) {
+    if (!data) return;
+    const uid = authService.user?.uid;
+    const isHost = data.host?.uid === uid;
+    // Opponent left → bail to the online lobby with a message.
+    if (data.status === 'abandoned' && data.abandonedBy !== uid) {
+      this.stopPong();
+      this.pongOnlineCleanup();
+      alert('Opponent left the game.');
+      this.showScreen('pong-online-screen');
+      return;
+    }
+    // Host: once a guest joins, flip to playing and start the game.
+    if (isHost && this._pongWaitingForGuest && data.status === 'waiting') {
+      const players = data.players || {};
+      if (Object.keys(players).length >= 2) {
+        this._pongWaitingForGuest = false;
+        pongNetService.setPlaying();
+      }
+    }
+    if (data.status === 'playing' && !this._pongGameStarted) {
+      this._pongGameStarted = true;
+      this._startPongOnline(isHost ? 'host' : 'guest');
+    }
+    // Mid-game updates: host reads the guest's paddle; guest reads host state.
+    if (this._pongGameStarted && this.pong) {
+      if (isHost) {
+        const guestEntry = Object.values(data.players || {}).find((p) => !p.isHost);
+        if (guestEntry) this.pong.setOpponentPaddle(guestEntry.paddleY ?? 225, guestEntry.paddleT ?? null);
+      } else {
+        if (data.pong) this.pong.applyRemoteState(data.pong);
+      }
+      // Connection-health: 3s no update → reconnecting; 10s → lost.
+      this._pongLastRecv = Date.now();
+    }
+  }
+
+  // Wire the Pong instance's net hooks to the Firestore transport and start.
+  _startPongOnline(role) {
+    const canvas = document.getElementById('pong-canvas');
+    const frame = document.getElementById('pong-board-frame');
+    this.pongMode = 'online';
+    const title = document.getElementById('pong-mode-title');
+    const help = document.getElementById('pong-controls-help');
+    if (title) title.textContent = `ONLINE PONG · ${role === 'host' ? 'HOST' : 'GUEST'}`;
+    if (help) help.innerHTML = 'W/S or ↑/↓ move<br>MOUSE follows<br>P pause · first to 7';
+    this.stopPong();
+    this.pong = new Pong({
+      canvas,
+      boardFrame: frame,
+      mode: 'online',
+      netRole: role,
+      onHighScore: () => this.renderCabinetScores(),
+      // Host ships state; guest ships its paddle Y.
+      onHostSnapshot: role === 'host' ? (s) => pongNetService.writeHostState(s) : null,
+      onGuestPaddle: role === 'guest' ? (y) => pongNetService.writeGuestPaddle(y) : null,
+    });
+    this.pong.start();
+    this._pongLastRecv = Date.now();
+    this.showScreen('pong-screen');
+    // Heartbeat: escalate to reconnecting / lost if updates stop.
+    if (this._pongHeartbeat) clearInterval(this._pongHeartbeat);
+    this._pongHeartbeat = setInterval(() => {
+      if (!this._pongGameStarted || !this.pong) return;
+      // A finished game stops writing snapshots — don't escalate to "lost".
+      if (this.pong.over) { clearInterval(this._pongHeartbeat); this._pongHeartbeat = null; return; }
+      const since = Date.now() - (this._pongLastRecv || 0);
+      if (since > 10000) {
+        this.pong.setNetStatus('lost');
+        this.stopPong();
+        this.pongOnlineCleanup();
+        document.getElementById('pong-gameover-overlay')?.classList.remove('hidden');
+        const banner = document.getElementById('pong-winner-banner');
+        if (banner) { banner.textContent = 'CONNECTION LOST'; banner.style.color = 'var(--pink)'; }
+        const stats = document.getElementById('pong-final-stats');
+        if (stats) stats.textContent = 'No score submitted.';
+      } else if (since > 3000) {
+        this.pong.setNetStatus('reconnecting');
+      } else {
+        this.pong.setNetStatus('ok');
+      }
+    }, 500);
+  }
+
+  async pongRematch() {
+    if (this.pongMode === 'online') {
+      this.stopPong();
+      if (this._pongHeartbeat) { clearInterval(this._pongHeartbeat); this._pongHeartbeat = null; }
+      this._pongGameStarted = false;
+      if (pongNetService.role === 'host') {
+        // Host: spin up a fresh room and stamp the old doc so the guest rejoins.
+        const newCode = await pongNetService.rematch();
+        if (!newCode) { alert('Failed to start a new room.'); this.showScreen('pong-online-screen'); return; }
+        document.getElementById('pong-room-code-display').textContent = newCode;
+        document.getElementById('pong-waiting')?.classList.remove('hidden');
+        const status = document.getElementById('pong-online-status');
+        if (status) status.textContent = 'Waiting for opponent to join…';
+        this.pongNetStarted = true;
+        this._pongWaitingForGuest = true;
+        pongNetService.onUpdate = (data) => this._onPongRoomUpdate(data);
+        this.showScreen('pong-online-screen');
+      } else {
+        // Guest: wait for the host's rematchRoomCode, then rejoin.
+        const status = document.getElementById('pong-online-status');
+        if (status) status.textContent = 'Waiting for host to rematch…';
+        document.getElementById('pong-waiting')?.classList.remove('hidden');
+        this.showScreen('pong-online-screen');
+        const prev = pongNetService.onUpdate;
+        pongNetService.onUpdate = (data) => {
+          if (data?.rematchRoomCode) {
+            pongNetService.onUpdate = null;
+            this.pongOnlineCleanup();
+            this.pongJoinRematch(data.rematchRoomCode);
+          } else if (prev) prev(data);
+        };
+      }
+      return;
+    }
+    this.pong?.retry();
+  }
+
+  async pongJoinRematch(code) {
+    const res = await pongNetService.joinRoom(code);
+    if (!res.success) { alert(res.error); this.showScreen('pong-online-screen'); return; }
+    this.pongNetStarted = true;
+    this._pongWaitingForGuest = false;
+    pongNetService.onUpdate = (data) => this._onPongRoomUpdate(data);
   }
 
   // ---- Auth UI ----
