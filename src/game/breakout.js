@@ -1,8 +1,9 @@
 // Breakout — complete vanilla-canvas implementation for the arcade hub.
 // Sub-stepped ball physics (no tunnelling), paddle-angle bounce with a 20°
-// from-horizontal floor, 8 handcrafted ASCII levels that loop with speed,
-// WIDE/MULTI/SLOW/1UP power-ups, particles + ball trail, fixed-dt loop.
-// Reuses arcadeFX SFX; high score in localStorage (no backend yet). No deps.
+// from-horizontal floor, 10 handcrafted ASCII levels that loop with rising
+// speed, WIDE/MULTI/SLOW/1UP power-ups, explosive chain bricks, particles +
+// ball trail, fixed-dt loop. Reuses arcadeFX SFX; high score in localStorage
+// (no backend yet). No deps.
 import { arcadeFX } from './arcade.js';
 
 // Playfield (drawing buffer). Walls are the canvas edges (left/right/top);
@@ -34,18 +35,17 @@ const MAX_BALLS = 6;
 // Brick-row accent colors (cycles pink→purple).
 const ROW_COLORS = ['#ff2e63', '#ff8c42', '#ffc93c', '#3df58c', '#4dd8ff', '#4d79ff', '#b04dff'];
 
-// 8 handcrafted layouts. '.' empty, '1' normal, '2' armored, 'X' steel.
-// 13 cols, up to 8 rows. Loop after 8 with increased speed.
+// 10 handcrafted layouts. '.' empty, '1' normal, '2' armored, '3' explosive
+// (chains to 4-neighbors), 'X' steel. 13 cols, up to 8 rows. Loop after 10
+// with rising speed.
 const LEVELS = [
-  // 1 — classic rows
+  // 1 — light opener: ~60 bricks so the first level is a quick, satisfying
+  //      clear, not the densest level in the game.
   [
     '1111111111111',
+    '1.111111111.1',
     '1212121212121',
-    '1111111111111',
-    '1111111111111',
-    '1212121212121',
-    '1111111111111',
-    '1111111111111',
+    '1.111111111.1',
     '1111111111111',
   ],
   // 2 — pyramid
@@ -69,7 +69,8 @@ const LEVELS = [
     '1.1.1.1.1.1.1',
     '.1.1.1.1.1.1.',
   ],
-  // 4 — fortress (steel walls)
+  // 4 — fortress (steel walls with a door, else the interior is sealed and
+  //      the level is unwinnable — the ball can never reach the inner bricks)
   [
     'XXXXXXXXXXXXX',
     'X...........X',
@@ -77,7 +78,7 @@ const LEVELS = [
     'X.122222221.X',
     'X.111111111.X',
     'X...........X',
-    'XXXXXXXXXXXXX',
+    'XXXX.....XXXX',
   ],
   // 5 — smiley
   [
@@ -122,6 +123,32 @@ const LEVELS = [
     '...1111111...',
     '....11111....',
     '.....111.....',
+  ],
+  // 9 — bomb squad: explosives are clustered (adjacent 3s) so a single hit
+  //      actually chains through the cluster — four chain reactions seeded
+  //      across the field. 13 cols, 8 rows.
+  [
+    '1111111111111',
+    '.1331...1331.',
+    '1.1.1.1.1.1.1',
+    '11.333.333.11',
+    '1.1.1.1.1.1.1',
+    '.1331...1331.',
+    '1111111111111',
+    '1.333.1.333.1',
+  ],
+  // 10 — detonator: a fully connected ring of explosives around an armored
+  //      core. One hit anywhere on the ring cascades the whole ring — the
+  //      payoff level — leaving the 2-hp armored core to clean up by hand.
+  [
+    '...3333333...',
+    '...3.....3...',
+    '...3.222.3...',
+    '...3.222.3...',
+    '...3.222.3...',
+    '...3.....3...',
+    '...3333333...',
+    '.............',
   ],
 ];
 
@@ -177,11 +204,13 @@ export class Breakout {
     this.slowTimer = 0;
     this.flashTimer = 0;     // paddle contact flash
     this.clearTimer = 0;     // >0 → level-clear message showing, gameplay paused
+    this.levelBannerTimer = 0; // >0 → "LEVEL N" intro banner showing
     this.over = false;
     this.paused = false;
+    this.nextExtraLifeAt = 20000; // +1 life every 20k, flagged here so it's not double-awarded
     this.paddleTarget = W / 2;
     this.paddle = { x: W / 2 - PADDLE_BASE_W / 2, y: PADDLE_Y, w: PADDLE_BASE_W };
-    this.dasDir = 0; this.dasTimer = 0; this.dasCharged = false;
+    this.dasDir = 0;
     this.loadLevel(0);
   }
 
@@ -194,7 +223,10 @@ export class Breakout {
       for (let c = 0; c < COLS && c < layout[r].length; c++) {
         const ch = layout[r][c];
         if (ch === '.') continue;
-        const type = ch === 'X' ? 'steel' : ch === '2' ? 'armored' : 'normal';
+        const type = ch === 'X' ? 'steel'
+          : ch === '2' ? 'armored'
+          : ch === '3' ? 'explosive'
+          : 'normal';
         this.bricks.push({
           x: c * BRICK_W,
           y: TOP_OFFSET + r * BRICK_H,
@@ -205,15 +237,36 @@ export class Breakout {
           type,
           hp: type === 'armored' ? 2 : 1,
           maxHp: type === 'armored' ? 2 : 1,
-          color: ROW_COLORS[r % ROW_COLORS.length],
+          color: type === 'explosive' ? '#ff7a00' : ROW_COLORS[r % ROW_COLORS.length],
           alive: true,
         });
       }
     }
-    this.paddleHits = 0;
+    // Per-loop escalation (loop 0 = first pass plays as-designed). From the
+    // second pass onward, armored bricks gain HP (cap 4) and a growing share
+    // of normal bricks harden into armored — so repeats past level 10 aren't
+    // speed-only; the layouts themselves get tougher to crack.
+    const loop = Math.floor(idx / LEVELS.length);
+    if (loop >= 1) {
+      const armoredHp = Math.min(4, 1 + loop); // loop1→2hp, loop2→3hp, loop3+→4hp
+      const promoteChance = Math.min(0.5, 0.15 * loop);
+      for (const b of this.bricks) {
+        if (b.type === 'armored') {
+          b.hp = armoredHp; b.maxHp = armoredHp;
+        } else if (b.type === 'normal' && Math.random() < promoteChance) {
+          b.type = 'armored';
+          b.hp = armoredHp; b.maxHp = armoredHp;
+        }
+      }
+    }
+    // Carry half the rally bonus into the next level so the ball doesn't
+    // abruptly stall at each new level — keeps the pace up between levels.
+    this.paddleHits = Math.floor(this.paddleHits / 2);
     this.powerups = [];
     this.balls = [];
     this.spawnBallOnPaddle();
+    // Brief "LEVEL N" banner so advancing feels like an event.
+    this.levelBannerTimer = 1.6;
   }
 
   spawnBallOnPaddle() {
@@ -230,8 +283,17 @@ export class Breakout {
     const levelMult = Math.pow(1.04, this.levelNumber); // level 0 → 1.0
     const paddleBonus = Math.pow(1.02, Math.floor(this.paddleHits / 10));
     let s = BASE_SPEED * levelMult * paddleBonus;
-    s = Math.min(s, BASE_SPEED * 2); // hard cap 2× starting
-    if (this.slowTimer > 0) s *= 0.7;
+    // Cap rises with each full loop so late game keeps escalating instead of
+    // going flat at 2× forever (bounded at 3.5× so it stays playable).
+    const loop = Math.floor(this.levelNumber / LEVELS.length);
+    const cap = BASE_SPEED * Math.min(3.5, 2 + 0.2 * loop);
+    s = Math.min(s, cap);
+    if (this.slowTimer > 0) {
+      // Full 0.7× while > 0.5 s remain; ease back to 1× over the last 0.5 s
+      // so SLOW expiry isn't a sudden, unfair speed jump.
+      const t = Math.min(1, this.slowTimer / 0.5);
+      s *= 1 - 0.3 * t;
+    }
     return s;
   }
 
@@ -279,11 +341,13 @@ export class Breakout {
       this.displayedScore += Math.max(1, Math.ceil(diff * 0.2));
       if (this.displayedScore > this.score) this.displayedScore = this.score;
       this.updateHUD();
+      this.checkExtraLife();
     }
     // Timers.
     if (this.wideTimer > 0) this.wideTimer = Math.max(0, this.wideTimer - dt);
     if (this.slowTimer > 0) this.slowTimer = Math.max(0, this.slowTimer - dt);
     if (this.flashTimer > 0) this.flashTimer = Math.max(0, this.flashTimer - dt);
+    if (this.levelBannerTimer > 0) this.levelBannerTimer = Math.max(0, this.levelBannerTimer - dt);
     // Paddle width follows WIDE timer (timer-stacked: refresh, not stacked).
     const targetW = this.wideTimer > 0 ? PADDLE_BASE_W * 1.4 : PADDLE_BASE_W;
     if (this.paddle.w !== targetW) {
@@ -312,27 +376,21 @@ export class Breakout {
     this.updateParticles(dt);
 
     // Level clear when no breakable bricks remain (steel doesn't count).
-    if (this.bricks.every((b) => !b.alive || b.type === 'steel') &&
-        !this.bricks.some((b) => b.alive && b.type !== 'steel')) {
+    if (!this.bricks.some((b) => b.alive && b.type !== 'steel')) {
       this.startLevelClear();
     }
   }
 
   movePaddle(dt) {
-    // Keys drive DAS increments on the target; mouse/touch set the target
-    // directly (handled in input handlers). Clamp to walls.
+    // Keys move the target continuously at full speed (smooth), instead of
+    // the old DAS 18px hops that felt choppy. Mouse/touch set the target
+    // directly in their handlers; both reach the paddle the same way here.
     if (this.dasDir !== 0) {
-      this.dasTimer += dt;
-      if (!this.dasCharged && this.dasTimer >= 0.17) {
-        this.dasCharged = true; this.dasTimer = 0;
-        this.paddleTarget += this.dasDir * PADDLE_KEY_SPEED * 0.04;
-      } else if (this.dasCharged && this.dasTimer >= 0.04) {
-        this.dasTimer = 0;
-        this.paddleTarget += this.dasDir * PADDLE_KEY_SPEED * 0.04;
-      }
+      this.paddleTarget += this.dasDir * PADDLE_KEY_SPEED * dt;
     }
-    this.paddleTarget = Math.max(this.paddle.w / 2, Math.min(W - this.paddle.w / 2, this.paddleTarget));
-    this.paddle.x = this.paddleTarget - this.paddle.w / 2;
+    const half = this.paddle.w / 2;
+    this.paddleTarget = Math.max(half, Math.min(W - half, this.paddleTarget));
+    this.paddle.x = this.paddleTarget - half;
   }
 
   // Sub-step the ball so its per-frame travel never exceeds half a brick's
@@ -372,51 +430,80 @@ export class Breakout {
   collidePaddle(ball) {
     const p = this.paddle;
     if (ball.dir.y <= 0) return; // only when descending
-    if (ball.y + BALL_R >= p.y && ball.y - BALL_R <= p.y + PADDLE_H &&
-        ball.x >= p.x - BALL_R && ball.x <= p.x + p.w + BALL_R) {
-      ball.y = p.y - BALL_R;
-      // Map hit offset (−1..+1) to exit angle 90° ± 60° → [30°,150°].
-      // 90° = straight up; edges → steep sideways. This guarantees ≥30°
-      // from horizontal (≥20° floor satisfied), so no horizontal ping-pong.
-      const offset = Math.max(-1, Math.min(1, (ball.x - (p.x + p.w / 2)) / (p.w / 2)));
-      const angleDeg = 90 - offset * 60;
-      const rad = (angleDeg * Math.PI) / 180;
-      ball.dir.x = Math.cos(rad);
-      ball.dir.y = -Math.sin(rad);
-      this.paddleHits++;
+    const overlapY = ball.y + BALL_R >= p.y && ball.y - BALL_R <= p.y + PADDLE_H;
+    if (!overlapY) return;
+    if (ball.x < p.x - BALL_R || ball.x > p.x + p.w + BALL_R) return;
+
+    // Side scrape: ball center is past a paddle edge → bounce sideways, not
+    // up through the top. Stops the ball from popping out the top of the
+    // paddle after a steep side approach.
+    const pastLeft = ball.x < p.x;
+    const pastRight = ball.x > p.x + p.w;
+    if (pastLeft || pastRight) {
+      ball.dir.x = (pastLeft ? -1 : 1) * Math.abs(ball.dir.x || 1);
+      ball.x = pastLeft ? p.x - BALL_R - 0.1 : p.x + p.w + BALL_R + 0.1;
       this.flashTimer = 0.12;
       this.blip('click');
+      return; // no paddle-hit bonus for a scrape
     }
+
+    // Top hit: map hit offset (−1..+1) to exit angle 90° ± 60° → [30°,150°].
+    // 90° = straight up; edges → steep sideways. Guarantees ≥30° from
+    // horizontal (≥20° floor satisfied), so no horizontal ping-pong.
+    ball.y = p.y - BALL_R;
+    const offset = Math.max(-1, Math.min(1, (ball.x - (p.x + p.w / 2)) / (p.w / 2)));
+    const angleDeg = 90 - offset * 60;
+    const rad = (angleDeg * Math.PI) / 180;
+    ball.dir.x = Math.cos(rad);
+    ball.dir.y = -Math.sin(rad);
+    this.paddleHits++;
+    this.flashTimer = 0.12;
+    this.blip('click');
   }
 
   collideBricks(ball) {
-    // Find the closest overlapping brick and resolve one collision per call.
-    let best = null;
-    let bestDist = Infinity;
-    for (const b of this.bricks) {
-      if (!b.alive) continue;
-      const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
-      const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
-      const dx = ball.x - cx;
-      const dy = ball.y - cy;
-      const d2 = dx * dx + dy * dy;
-      if (d2 <= BALL_R * BALL_R && d2 < bestDist) {
-        best = b; bestDist = d2;
+    // Resolve up to two overlapping bricks per sub-step — a corner can
+    // overlap two adjacent bricks at once. Each is resolved by the axis of
+    // least penetration, which is more correct than the old center-outside
+    // heuristic and stops wrong-axis flips that let the ball leak through.
+    for (let pass = 0; pass < 2; pass++) {
+      let best = null;
+      let bestDist = Infinity;
+      for (const b of this.bricks) {
+        if (!b.alive) continue;
+        const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+        const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+        const dx = ball.x - cx;
+        const dy = ball.y - cy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= BALL_R * BALL_R && d2 < bestDist) { best = b; bestDist = d2; }
       }
+      if (!best) break;
+      const overlapL = (ball.x + BALL_R) - best.x;
+      const overlapR = (best.x + best.w) - (ball.x - BALL_R);
+      const overlapT = (ball.y + BALL_R) - best.y;
+      const overlapB = (best.y + best.h) - (ball.y - BALL_R);
+      const minX = Math.min(overlapL, overlapR);
+      const minY = Math.min(overlapT, overlapB);
+      if (minX < minY) {
+        ball.dir.x = -ball.dir.x;
+        ball.x = overlapL < overlapR ? best.x - BALL_R - 0.01 : best.x + best.w + BALL_R + 0.01;
+      } else {
+        ball.dir.y = -ball.dir.y;
+        ball.y = overlapT < overlapB ? best.y - BALL_R - 0.01 : best.y + best.h + BALL_R + 0.01;
+      }
+      this.hitBrick(best);
     }
-    if (!best) return;
-    // Determine hit side by whether the ball center is outside the brick on
-    // each axis — corner (outside both) flips both components.
-    const outsideX = ball.x < best.x || ball.x > best.x + best.w;
-    const outsideY = ball.y < best.y || ball.y > best.y + best.h;
-    if (outsideX && outsideY) { ball.dir.x = -ball.dir.x; ball.dir.y = -ball.dir.y; }
-    else if (outsideX) { ball.dir.x = -ball.dir.x; }
-    else { ball.dir.y = -ball.dir.y; }
-    // Push the ball out of the brick so it doesn't re-collide next step.
-    if (outsideX) ball.x += ball.dir.x * BALL_R;
-    if (outsideY) ball.y += ball.dir.y * BALL_R;
-
-    this.hitBrick(best);
+    // Anti-trap: keep the ball ≥20° from horizontal so it can't settle into
+    // tedious near-horizontal ping-pong between bricks/steel. Preserves the
+    // current vertical sign and keeps the direction unit-length.
+    const minVy = Math.sin((20 * Math.PI) / 180);
+    if (Math.abs(ball.dir.y) < minVy) {
+      const sign = ball.dir.y < 0 ? -1 : (ball.dir.y > 0 ? 1 : -1);
+      ball.dir.y = sign * minVy;
+      const rem = Math.max(0, 1 - ball.dir.y * ball.dir.y);
+      ball.dir.x = Math.sign(ball.dir.x || -1) * Math.sqrt(rem);
+    }
   }
 
   hitBrick(b) {
@@ -439,6 +526,35 @@ export class Breakout {
     this.spawnParticles(b.x + b.w / 2, b.y + b.h / 2, b.color, 8);
     this.blip('coin');
     this.maybeDropPowerup(b);
+    if (b.type === 'explosive') this.detonate(b);
+  }
+
+  // Explosive chain: destroy the 4-neighbourhood of `origin` (never steel),
+  // cascading through any explosive neighbours. The origin itself is already
+  // dead and scored; this only scores the neighbours it takes with it.
+  detonate(origin) {
+    const queue = [origin];
+    const seen = new Set([origin]);
+    while (queue.length) {
+      const b = queue.shift();
+      for (const n of this.bricks) {
+        if (seen.has(n) || !n.alive) continue;
+        const adj = (n.row === b.row && Math.abs(n.col - b.col) === 1) ||
+                    (n.col === b.col && Math.abs(n.row - b.row) === 1);
+        if (!adj) continue;
+        seen.add(n);
+        if (n.type === 'steel') continue;
+        n.alive = false;
+        const mult = (8 - n.row) || 1;
+        const pts = 50 * Math.max(1, mult) * (n.type === 'armored' ? 2 : 1);
+        this.score += pts;
+        this.spawnParticles(n.x + n.w / 2, n.y + n.h / 2, n.color, 8);
+        if (n.type === 'explosive') queue.push(n);
+      }
+    }
+    this.spawnParticles(origin.x + origin.w / 2, origin.y + origin.h / 2, '#ff7a00', 20);
+    this.blip('bullseye');
+    this.updateHUD();
   }
 
   // ---- power-ups ----
@@ -531,8 +647,27 @@ export class Breakout {
 
   startLevelClear() {
     this.clearTimer = 1.2;
+    // Reward advancing: a clear bonus that scales with level so finishing a
+    // level feels earned, not just "next layout loaded".
+    const bonus = 500 * (this.levelNumber + 1);
+    this.score += bonus;
+    this.updateHUD();
+    this.checkExtraLife();
     this.blip('levelUp');
     if (this.boardFrame && !this.reducedMotion) this.flashFrame();
+  }
+
+  // Extra life at 20k, 40k, 60k… (capped at 9). Called after score gains so a
+  // big cascade or clear bonus can push you over the threshold mid-frame.
+  checkExtraLife() {
+    while (this.score >= this.nextExtraLifeAt && this.lives < 9) {
+      this.lives++;
+      this.nextExtraLifeAt += 20000;
+      this.blip('bullseye');
+      this.updateHUD();
+    }
+    // If already maxed, still advance the threshold so it doesn't fire later.
+    if (this.lives >= 9) this.nextExtraLifeAt = Math.max(this.nextExtraLifeAt, this.score + 20000);
   }
 
   loseLife() {
@@ -543,6 +678,10 @@ export class Breakout {
     this.powerups = [];
     this.wideTimer = 0;
     this.slowTimer = 0;
+    // Drop the in-level speed bonus so a fresh ball is recoverable — without
+    // this, paddleHits (and thus currentSpeed) stays high after death and the
+    // relaunched ball is still at the speed that helped kill you.
+    this.paddleHits = Math.floor(this.paddleHits / 2);
     this.spawnBallOnPaddle();
   }
 
@@ -558,11 +697,37 @@ export class Breakout {
     const stats = document.getElementById('breakout-final-stats');
     if (stats) stats.textContent = `SCORE ${this.score} · LEVEL ${this.levelNumber + 1}`;
     if (ov) ov.classList.remove('hidden');
+    // Offer CONTINUE only when the player actually advanced — otherwise it's
+    // identical to RETRY and just clutters the game-over screen.
+    const cont = document.getElementById('breakout-continue-btn');
+    if (cont) cont.style.display = this.levelNumber > 0 ? '' : 'none';
   }
 
   retry() {
     this.hideOverlays();
     this.reset();
+    this.lastTime = performance.now();
+  }
+
+  // Keep score + reached level, but restore lives and clear the speed ramp so
+  // a death deep in the game doesn't throw away all progress.
+  continueGame() {
+    this.hideOverlays();
+    this.over = false;
+    this.lives = 3;
+    this.paddleHits = 0;
+    this.wideTimer = 0;
+    this.slowTimer = 0;
+    this.powerups = [];
+    this.particles = [];
+    this.paddleTarget = W / 2;
+    this.paddle = { x: W / 2 - PADDLE_BASE_W / 2, y: PADDLE_Y, w: PADDLE_BASE_W };
+    this.dasDir = 0;
+    // Re-stamp the extra-life threshold against the carried score so continues
+    // can't farm lives by re-crossing a threshold already passed.
+    this.nextExtraLifeAt = Math.max(20000, Math.ceil(this.score / 20000) * 20000);
+    if (this.nextExtraLifeAt <= this.score) this.nextExtraLifeAt = this.score + 20000;
+    this.loadLevel(this.levelNumber);
     this.lastTime = performance.now();
   }
 
@@ -621,8 +786,11 @@ export class Breakout {
   }
 
   onMouseMove(e) {
+    // Keyboard has priority while a movement key is held — a stray mouse
+    // event (cursor brushing the canvas mid-keyboard-play) no longer silently
+    // cancels key movement. Release the keys to hand control back to the mouse.
+    if (this.dasDir !== 0) return;
     this.paddleTarget = this.clientToX(e.clientX);
-    this.dasDir = 0; // mouse overrides keys
   }
   onTouchMove(e) {
     if (e.preventDefault) e.preventDefault();
@@ -632,7 +800,7 @@ export class Breakout {
   }
   onKeyUp(e) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      this.dasDir = 0; this.dasCharged = false;
+      this.dasDir = 0;
     }
   }
   onKey(e) {
@@ -646,15 +814,16 @@ export class Breakout {
         e.preventDefault(); this.launch(); break;
       case 'ArrowLeft':
         e.preventDefault();
-        this.dasDir = -1; this.dasTimer = 0; this.dasCharged = false;
-        this.paddleTarget = this.paddle.x + this.paddle.w / 2; // sync target to current
-        this.paddleTarget -= 10;
+        this.dasDir = -1;
+        // Initial-press nudge only — NOT on OS key-repeat, which fires this
+        // ~30×/s and would stack 10px hops on top of the smooth continuous
+        // movePaddle motion, making keyboard play jerky and too fast.
+        if (!e.repeat) this.paddleTarget = this.paddle.x + this.paddle.w / 2 - 10;
         break;
       case 'ArrowRight':
         e.preventDefault();
-        this.dasDir = 1; this.dasTimer = 0; this.dasCharged = false;
-        this.paddleTarget = this.paddle.x + this.paddle.w / 2;
-        this.paddleTarget += 10;
+        this.dasDir = 1;
+        if (!e.repeat) this.paddleTarget = this.paddle.x + this.paddle.w / 2 + 10;
         break;
       default: break;
     }
@@ -699,6 +868,41 @@ export class Breakout {
       ctx.restore();
     }
 
+    // Level intro banner — fade in/out so advancing reads as an event.
+    if (this.levelBannerTimer > 0) {
+      const t = this.levelBannerTimer;
+      const fadeIn = Math.min(1, (1.6 - t) / 0.25);
+      const fadeOut = Math.min(1, t / 0.5);
+      const alpha = Math.min(fadeIn, fadeOut);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(10,6,26,0.45)';
+      ctx.fillRect(0, H / 2 - 28, W, 56);
+      ctx.fillStyle = '#4dd8ff';
+      ctx.shadowColor = '#4dd8ff';
+      ctx.shadowBlur = 20;
+      ctx.font = '24px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`LEVEL ${this.levelNumber + 1}`, W / 2, H / 2);
+      ctx.restore();
+    }
+
+    // Launch prompt — pulsing hint while the ball waits on the paddle, so a
+    // first-time player knows how to start (and restart after each life).
+    const ready = this.balls[0] && !this.balls[0].launched;
+    if (ready && this.clearTimer <= 0 && !this.over) {
+      const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 250);
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '9px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PRESS SPACE / CLICK / TAP TO LAUNCH', W / 2, H - 52);
+      ctx.restore();
+    }
+
     this.renderLives();
   }
 
@@ -719,17 +923,38 @@ export class Breakout {
       ctx.restore();
       return;
     }
-    const dimmed = b.type === 'armored' && b.hp < b.maxHp;
+    if (b.type === 'explosive') {
+      // Pulsing warning core so players can read it as "hit me for a chain".
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 120);
+      ctx.save();
+      ctx.shadowColor = '#ff7a00';
+      ctx.shadowBlur = 10 + pulse * 8;
+      ctx.fillStyle = shade('#ff7a00', -0.2);
+      ctx.fillRect(x, y, w, h);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = shade('#ff7a00', 0.3);
+      ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.5 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(x + w / 2, y + h / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    // Armored bricks dim proportionally to damage so multi-hit armor (loop
+    // escalation) reads visually — a 4-hp brick visibly weakens each hit,
+    // not just flips to "damaged" on the first one.
+    const dmg = b.type === 'armored' ? 1 - b.hp / b.maxHp : 0;
     ctx.save();
     ctx.shadowColor = b.color;
     ctx.shadowBlur = 8;
-    ctx.fillStyle = shade(b.color, dimmed ? -0.35 : -0.18);
+    ctx.fillStyle = shade(b.color, -0.18 - dmg * 0.25);
     ctx.fillRect(x, y, w, h);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = shade(b.color, dimmed ? 0.05 : 0.28);
+    ctx.fillStyle = shade(b.color, 0.28 - dmg * 0.3);
     ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
     ctx.fillStyle = b.color;
-    ctx.globalAlpha = dimmed ? 0.6 : 1;
+    ctx.globalAlpha = 1 - dmg * 0.5;
     ctx.fillRect(x + 5, y + 5, w - 10, h - 10);
     ctx.globalAlpha = 1;
     if (b.type === 'armored') {
@@ -875,10 +1100,21 @@ export function _selfCheck() {
   for (const lvl of LEVELS) {
     for (const row of lvl) {
       if (row.length > COLS) throw new Error(`row too wide: ${row}`);
-      for (const ch of row) if (!'.12X'.includes(ch)) throw new Error(`bad char ${ch}`);
+      for (const ch of row) if (!'.123X'.includes(ch)) throw new Error(`bad char ${ch}`);
     }
   }
-  if (LEVELS.length !== 8) throw new Error('want 8 levels');
+  if (LEVELS.length !== 10) throw new Error('want 10 levels');
+
+  // Level 4 (fortress) must have a door — a fully sealed steel perimeter is
+  // unwinnable because the ball can never reach the interior bricks.
+  if (!LEVELS[3][6].includes('.')) throw new Error('fortress bottom wall has no door');
+
+  // Explosive bricks exist and parse to the right type.
+  const be = new Breakout({});
+  be.loadLevel(8);
+  if (!be.bricks.some((x) => x.type === 'explosive')) {
+    throw new Error('level 9 should contain explosive bricks');
+  }
 
   // Paddle bounce: offset ±1 → angle in [30°,150°] → ≥30° from horizontal.
   const b = new Breakout({});
@@ -890,22 +1126,26 @@ export function _selfCheck() {
     if (fromHoriz < 20) throw new Error(`angle ${deg} too shallow (${fromHoriz}° from horizontal)`);
   }
 
-  // Sub-steps: at 2× speed on a 32ms (capped) frame, travel exceeds half a
-  // brick's height → the ball is sub-stepped rather than tunnelled.
-  const fast = BASE_SPEED * 2;
+  // Sub-steps: at the max cap speed (3.5×) on a 32ms (capped) frame, travel
+  // exceeds half a brick's height → the ball is sub-stepped, not tunnelled.
+  const fast = BASE_SPEED * 3.5;
   const travel = fast * 0.032;
   const steps = Math.max(1, Math.ceil(travel / (BRICK_H / 2)));
   if (steps < 2) throw new Error(`sub-steps ${steps} too few for fast ball`);
 
-  // Level wrap: index 8 → layout 0.
-  if (LEVELS[8 % LEVELS.length] !== LEVELS[0]) throw new Error('level wrap wrong');
+  // Level wrap: index 10 → layout 0.
+  if (LEVELS[10 % LEVELS.length] !== LEVELS[0]) throw new Error('level wrap wrong');
 
-  // Speed cap: never above 2× base (slow off).
+  // Speed cap: rises per loop, bounded at 3.5× base (slow off). At level 50
+  // the raw product far exceeds the cap, so currentSpeed must equal the cap.
   b.levelNumber = 50; b.paddleHits = 1000; b.slowTimer = 0;
-  if (b.currentSpeed() > BASE_SPEED * 2 + 0.001) throw new Error('speed cap violated');
-  // Slow multiplier.
+  const loop = Math.floor(b.levelNumber / LEVELS.length);
+  const expectedCap = BASE_SPEED * Math.min(3.5, 2 + 0.2 * loop);
+  if (b.currentSpeed() > expectedCap + 0.001) throw new Error('speed cap violated');
+  if (Math.abs(b.currentSpeed() - expectedCap) > 0.001) throw new Error('speed not at cap');
+  // Slow multiplier eases back over the last 0.5s; at 5s left it's full 0.7×.
   b.slowTimer = 5;
-  if (Math.abs(b.currentSpeed() - (BASE_SPEED * 2) * 0.7) > 0.01) throw new Error('slow mult wrong');
+  if (Math.abs(b.currentSpeed() - expectedCap * 0.7) > 0.01) throw new Error('slow mult wrong');
   b.slowTimer = 0;
 
   // Score ordering: top row (row 0) worth more than bottom row (row 7).

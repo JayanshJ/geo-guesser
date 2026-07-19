@@ -241,6 +241,13 @@
                     <div class="cabinet-stat" id="hs-platformer">CLEARED: 0/4</div>
                     <button class="cabinet-play" id="play-platformer-btn">▸ PLAY</button>
                 </div>
+                <div class="cabinet" data-game="maze">
+                    <div class="cabinet-emoji">🔵</div>
+                    <div class="cabinet-title">NEON MUNCH</div>
+                    <div class="cabinet-desc">Eat everything. Trust nothing.</div>
+                    <div class="cabinet-stat" id="hs-maze">HIGH SCORE: —</div>
+                    <button class="cabinet-play" id="play-maze-btn">▸ PLAY</button>
+                </div>
                 <div class="cabinet is-coming" data-game="soon-2">
                     <div class="cabinet-emoji">⏳</div>
                     <div class="cabinet-title">COMING SOON</div>
@@ -412,6 +419,7 @@
                         <div class="stat-line" id="breakout-final-stats">SCORE 0 · LEVEL 1</div>
                         <div class="tetris-overlay-actions">
                             <button class="cabinet-play" id="breakout-retry-btn">RETRY</button>
+                            <button class="cabinet-play" id="breakout-continue-btn" style="display:none;background:var(--gold);border-color:#b8901f;color:#1a1208;box-shadow:var(--press-shadow-sm),var(--glow-gold)">CONTINUE</button>
                             <button class="cabinet-play" id="breakout-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
                         </div>
                     </div>
@@ -483,6 +491,48 @@
                 </div>
             </div>
             <div class="tetris-touch" id="snake-touch">
+                <button data-st="up" title="Up">▲</button>
+                <button data-st="left" title="Left">◀</button>
+                <button data-st="down" title="Down">▼</button>
+                <button data-st="right" title="Right">▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Neon Munch Screen — maze chase. Reuses tetris board-frame / overlay / touch classes. -->
+    <div id="maze-screen" class="screen hidden">
+        <div class="tetris-wrap maze-wrap">
+            <h2 class="tetris-title maze-title" id="maze-title">NEON MUNCH</h2>
+            <div class="maze-hud-top">
+                <div class="tetris-panel maze-hud-panel">
+                    <div class="tetris-panel-label">SCORE</div>
+                    <div class="maze-hud-val" id="maze-score">0</div>
+                </div>
+                <div class="tetris-panel maze-hud-panel">
+                    <div class="tetris-panel-label">HI-SCORE</div>
+                    <div class="maze-hud-val" id="maze-hi">0</div>
+                </div>
+            </div>
+            <div class="tetris-board-frame maze-board-frame" id="maze-board-frame">
+                <canvas id="maze-canvas" width="448" height="496"></canvas>
+                <div class="tetris-overlay hidden" id="maze-pause-overlay">
+                    <h2>PAUSED</h2>
+                    <div class="stat-line">press P to resume</div>
+                </div>
+                <div class="tetris-overlay hidden" id="maze-gameover-overlay">
+                    <h2>GAME OVER</h2>
+                    <div class="stat-line" id="maze-final-stats">SCORE 0 · LEVEL 1</div>
+                    <div class="tetris-overlay-actions">
+                        <button class="cabinet-play" id="maze-retry-btn">RETRY</button>
+                        <button class="cabinet-play" id="maze-arcade-btn" style="background:var(--blue);border-color:#3454c2;box-shadow:var(--press-shadow-sm),var(--glow-blue)">◂ ARCADE</button>
+                    </div>
+                </div>
+            </div>
+            <div class="maze-hud-bottom">
+                <div class="maze-lives" id="maze-lives" aria-label="lives"></div>
+                <div class="maze-level-pill"><span class="lbl">LEVEL</span><span class="val" id="maze-level">1</span></div>
+            </div>
+            <div class="tetris-touch" id="maze-touch">
                 <button data-st="up" title="Up">▲</button>
                 <button data-st="left" title="Left">◀</button>
                 <button data-st="down" title="Down">▼</button>

@@ -13,6 +13,7 @@ import { ARCADE_MAP_STYLE } from '../game/mapStyle.js';
 import { Tetris, getTetrisHighScore } from '../game/tetris.js';
 import { Breakout, getBreakoutHighScore } from '../game/breakout.js';
 import { Snake, getSnakeHighScore } from '../game/snake.js';
+import { Maze, getMazeHighScore } from '../game/maze.js';
 import { Invaders, getInvadersHighScore } from '../game/invaders.js';
 import { Asteroids, getAsteroidsHighScore } from '../game/asteroids.js';
 import { Pong, getPongHighScore } from '../game/pong.js';
@@ -32,6 +33,7 @@ class UIController {
     this.tetris = null;
     this.breakout = null;
     this.snake = null;
+    this.maze = null;
     this.invaders = null;
     this.asteroids = null;
     this.pong = null;
@@ -147,6 +149,7 @@ class UIController {
     document.getElementById('play-tetris-btn')?.addEventListener('click', () => this.showScreen('tetris-screen'));
     document.getElementById('play-breakout-btn')?.addEventListener('click', () => this.showScreen('breakout-screen'));
     document.getElementById('play-snake-btn')?.addEventListener('click', () => this.showScreen('snake-screen'));
+    document.getElementById('play-maze-btn')?.addEventListener('click', () => this.showScreen('maze-screen'));
     document.getElementById('play-invaders-btn')?.addEventListener('click', () => this.showScreen('invaders-screen'));
     document.getElementById('play-asteroids-btn')?.addEventListener('click', () => this.showScreen('asteroids-screen'));
     // ◂ ARCADE back-link in the persistent header → hub.
@@ -162,6 +165,7 @@ class UIController {
 
     // Breakout overlay + touch controls
     document.getElementById('breakout-retry-btn')?.addEventListener('click', () => this.breakout?.retry());
+    document.getElementById('breakout-continue-btn')?.addEventListener('click', () => this.breakout?.continueGame());
     document.getElementById('breakout-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
     document.getElementById('breakout-pause-overlay')?.addEventListener('click', () => this.breakout?.togglePause());
     document.querySelectorAll('#breakout-touch [data-bt]').forEach((btn) => {
@@ -174,6 +178,14 @@ class UIController {
     document.getElementById('snake-pause-overlay')?.addEventListener('click', () => this.snake?.togglePause());
     document.querySelectorAll('#snake-touch [data-st]').forEach((btn) => {
       btn.addEventListener('click', () => this.snakeTouch(btn.dataset.st));
+    });
+
+    // Maze overlay + touch controls
+    document.getElementById('maze-retry-btn')?.addEventListener('click', () => this.maze?.retry());
+    document.getElementById('maze-arcade-btn')?.addEventListener('click', () => this.showScreen('arcade-hub'));
+    document.getElementById('maze-pause-overlay')?.addEventListener('click', () => this.maze?.togglePause());
+    document.querySelectorAll('#maze-touch [data-st]').forEach((btn) => {
+      btn.addEventListener('click', () => this.mazeTouch(btn.dataset.st));
     });
 
     // Invaders overlay + touch controls
@@ -1183,6 +1195,11 @@ class UIController {
     } else if (this.snake) {
       this.stopSnake();
     }
+    if (screenId === 'maze-screen') {
+      this.startMaze();
+    } else if (this.maze) {
+      this.stopMaze();
+    }
     if (screenId === 'invaders-screen') {
       this.startInvaders();
     } else if (this.invaders) {
@@ -1230,6 +1247,8 @@ class UIController {
     if (bEl) bEl.textContent = `HIGH SCORE: ${getBreakoutHighScore().toLocaleString()}`;
     const sEl = document.getElementById('hs-snake');
     if (sEl) sEl.textContent = `HIGH SCORE: ${getSnakeHighScore().toLocaleString()}`;
+    const mEl = document.getElementById('hs-maze');
+    if (mEl) mEl.textContent = `HIGH SCORE: ${getMazeHighScore().toLocaleString()}`;
     const iEl = document.getElementById('hs-invaders');
     if (iEl) iEl.textContent = `HIGH SCORE: ${getInvadersHighScore().toLocaleString()}`;
     const aEl = document.getElementById('hs-asteroids');
@@ -1339,6 +1358,33 @@ class UIController {
   // Mobile d-pad → queue a turn (same buffer as keyboard, with reversal guard).
   snakeTouch(kind) {
     this.snake?.queueInput(kind);
+  }
+
+  startMaze() {
+    const canvas = document.getElementById('maze-canvas');
+    const frame = document.getElementById('maze-board-frame');
+    if (!canvas) return;
+    if (!this.maze) {
+      this.maze = new Maze({
+        canvas,
+        boardFrame: frame,
+        onHighScore: () => this.renderCabinetScores(),
+      });
+    } else {
+      this.maze.canvas = canvas;
+      this.maze.boardFrame = frame;
+      this.maze.ctx = canvas?.getContext('2d');
+    }
+    this.maze.start();
+  }
+
+  stopMaze() {
+    this.maze?.stop();
+  }
+
+  // Mobile d-pad → buffered turn (same path as keyboard).
+  mazeTouch(kind) {
+    this.maze?.queueInput(kind);
   }
 
   startInvaders() {
