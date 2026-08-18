@@ -18,6 +18,11 @@ const PADDLE_H = 80;          // ~18% of field height
 const PADDLE_MARGIN = 28;
 const PADDLE_KEY_SPEED = 520; // px/s under keyboard
 const PADDLE_LERP = 14;       // opponent/remote paddle follow rate (per second)
+// Host tracks the guest's paddle faster (latency-critical: the host simulates
+// ball/paddle collisions against this, so a staler guest paddle = the guest's
+// blocks register late, "I blocked it but it scored"). The guest's *visual*
+// of the host paddle stays at the smoother PADDLE_LERP above.
+const PADDLE_LERP_HOST = 40;
 
 const BALL_R = 8;
 const BASE_SPEED = 380;       // serve speed (px/s)
@@ -272,9 +277,11 @@ export class Pong {
   }
 
   _moveOpponentRight(dt) {
-    // Host: lerp the right paddle toward the latest received guest Y.
+    // Host: lerp the right paddle toward the latest received guest Y. Uses the
+    // faster PADDLE_LERP_HOST so the guest's paddle is modeled with minimal
+    // extra delay (their blocks then register on the host's sim promptly).
     if (this._oppY !== undefined && this._oppY !== null) {
-      this.right.y += (this._oppY - this.right.y) * Math.min(1, dt * PADDLE_LERP);
+      this.right.y += (this._oppY - this.right.y) * Math.min(1, dt * PADDLE_LERP_HOST);
       this.right.y = this._clampPaddle(this.right.y);
     }
   }
@@ -453,21 +460,35 @@ export class Pong {
     if (this.onGuestPaddle) this.onGuestPaddle(this.left.y);
 
     // Interpolate the ball ~100ms behind real time across the receive buffer.
+    // performance.now() returns milliseconds, so the delay is 100 (not 0.1 —
+    // that earlier units bug left a 0.1ms window, so the buffer was never used
+    // and the ball snapped to each snapshot and froze between arrivals).
     const now = performance.now();
-    const target = now - 0.1;
+    const target = now - 100;
     let s0 = null; let s1 = null;
     for (let i = 0; i < this.snapBuf.length; i++) {
       if (this.snapBuf[i].recvAt <= target) s0 = this.snapBuf[i];
       else { s1 = this.snapBuf[i]; break; }
     }
     if (!s0 && this.snapBuf.length) s0 = this.snapBuf[this.snapBuf.length - 1];
-    if (s0 && s1) {
-      const span = s1.recvAt - s0.recvAt || 1;
+    if (s0 && s1 && s1.recvAt > s0.recvAt) {
+      const span = s1.recvAt - s0.recvAt;
       const f = clamp((target - s0.recvAt) / span, 0, 1);
       this.ball.x = s0.s.bx + (s1.s.bx - s0.s.bx) * f;
       this.ball.y = s0.s.by + (s1.s.by - s0.s.by) * f;
-    } else if (s0) {
-      this.ball.x = s0.s.bx; this.ball.y = s0.s.by;
+    } else {
+      // No newer state than the render target (a delivery gap exceeded the
+      // 100ms window), or only one state buffered. Extrapolate forward from
+      // the newest state along its shipped velocity (bvx/bvy) so the ball
+      // keeps moving until the next snapshot snaps it back — freezing here
+      // is what produced the stutter. Cap the horizon so a long dropout
+      // can't fling the ball off-screen.
+      const base = s1 || s0;
+      if (base) {
+        const fwd = Math.min(0.08, Math.max(0, (now - base.recvAt) / 1000));
+        this.ball.x = base.s.bx + (base.s.bvx || 0) * fwd;
+        this.ball.y = base.s.by + (base.s.bvy || 0) * fwd;
+      }
     }
     // Mirror phase/score/rally from the latest state.
     const latest = this.snapBuf[this.snapBuf.length - 1];
